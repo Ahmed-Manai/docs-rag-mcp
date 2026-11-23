@@ -5,6 +5,8 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)
 ![MCP](https://img.shields.io/badge/MCP-server-black)
 
+<!-- mcp-name: io.github.Ahmed-Manai/docs-rag-mcp -->
+
 An [MCP](https://modelcontextprotocol.io) server, written in C#, that lets Claude, GitHub Copilot, Cursor and other AI assistants search **your own documents** with retrieval-augmented generation (RAG).
 
 Point it at a folder of Markdown, text or PDF files. It splits them into passages, turns each passage into an embedding, and stores everything in a local SQLite file. When you ask your assistant a question, it calls `search_docs`, gets back the most relevant passages with their file and section, and answers from them.
@@ -48,17 +50,13 @@ flowchart LR
 
 ## Quick start (local, with Ollama)
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and [Ollama](https://ollama.com/download).
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and [Ollama](https://ollama.com/download). Pull the embedding model once:
 
 ```bash
 ollama pull nomic-embed-text
-
-git clone https://github.com/Ahmed-Manai/docs-rag-mcp.git
-cd docs-rag-mcp
-dotnet build -c Release
 ```
 
-Then add the server to your assistant, replacing `/path/to/docs-rag-mcp` with where you cloned it.
+The server is published on [NuGet](https://www.nuget.org/packages/DocsRagMcp) and in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.Ahmed-Manai/docs-rag-mcp`. `dnx`, which comes with .NET 10, downloads and starts it, so there is nothing else to install. Add it to your assistant:
 
 <details open>
 <summary><b>Claude Desktop</b></summary>
@@ -69,8 +67,8 @@ In `claude_desktop_config.json` (Settings > Developer > Edit Config):
 {
   "mcpServers": {
     "docs-rag": {
-      "command": "dotnet",
-      "args": ["run", "--no-build", "-c", "Release", "--project", "/path/to/docs-rag-mcp/src/DocsRagMcp"],
+      "command": "dnx",
+      "args": ["DocsRagMcp", "--yes"],
       "env": {
         "DOCSRAG_ALLOWED_PATHS": "/path/to/your/notes"
       }
@@ -91,8 +89,8 @@ In `.vscode/mcp.json`:
   "servers": {
     "docs-rag": {
       "type": "stdio",
-      "command": "dotnet",
-      "args": ["run", "--no-build", "-c", "Release", "--project", "/path/to/docs-rag-mcp/src/DocsRagMcp"],
+      "command": "dnx",
+      "args": ["DocsRagMcp", "--yes"],
       "env": {
         "DOCSRAG_ALLOWED_PATHS": "${workspaceFolder}"
       }
@@ -114,9 +112,21 @@ In `~/.cursor/mcp.json`, use the same `mcpServers` block as for Claude Desktop.
 <summary><b>Claude Code</b></summary>
 
 ```bash
-claude mcp add docs-rag -e DOCSRAG_ALLOWED_PATHS=/path/to/your/notes -- \
-  dotnet run --no-build -c Release --project /path/to/docs-rag-mcp/src/DocsRagMcp
+claude mcp add docs-rag -e DOCSRAG_ALLOWED_PATHS=/path/to/your/notes -- dnx DocsRagMcp --yes
 ```
+
+</details>
+
+<details>
+<summary><b>From source</b></summary>
+
+```bash
+git clone https://github.com/Ahmed-Manai/docs-rag-mcp.git
+cd docs-rag-mcp
+dotnet build -c Release
+```
+
+Then use `"command": "dotnet"` with `"args": ["run", "--no-build", "-c", "Release", "--project", "/path/to/docs-rag-mcp/src/DocsRagMcp"]`.
 
 </details>
 

@@ -6,12 +6,14 @@ on:
 
 permissions:
   contents: write
+  id-token: write # lets mcp-publisher sign in to the MCP Registry as this repository
 
 jobs:
   release:
     runs-on: ubuntu-latest
     env:
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      MCP_PUBLISHER_VERSION: v1.8.16
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +33,7 @@ jobs:
             echo "::error::src/DocsRagMcp/.mcp/server.json doesn't use version $version"
             exit 1
           fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Test
         run: dotnet test -c Release
@@ -40,8 +43,7 @@ jobs:
 
       - name: Extract release notes from CHANGELOG.md
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          awk -v heading="## $version" '
+          awk -v heading="## $VERSION" '
             index($0, heading) == 1 { found = 1; next }
             found && /^## / { exit }
             found { print }
@@ -54,4 +56,47 @@ jobs:
 
       - name: Publish to NuGet
         if: env.NUGET_API_KEY != ''
-        run: dotnet nuget push artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+        run: dotnet nuget push artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      # The registry checks the package README on nuget.org, which appears only after NuGet's validation.
+      - name: Wait for the package on nuget.org
+        if: env.NUGET_API_KEY != ''
+        run: |
+          url="https://api.nuget.org/v3-flatcontainer/docsragmcp/$VERSION/readme"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --output /dev/null "$url"; then
+              echo "Package $VERSION is available."
+              exit 0
+            fi
+            echo "Not available yet ($attempt/60), waiting 30 seconds..."
+            sleep 30
+          done
+          echo "::error::DocsRagMcp $VERSION didn't appear on nuget.org within 30 minutes. Re-run this job later."
+          exit 1
+
+      - name: Install cosign
+        if: env.NUGET_API_KEY != ''
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download and verify mcp-publisher
+        if: env.NUGET_API_KEY != ''
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+
+      - name: Publish to the MCP Registry
+        if: env.NUGET_API_KEY != ''
+        run: |
+          ./mcp-publisher login github-oidc
+          cd src/DocsRagMcp/.mcp
+          ../../../mcp-publisher publish
