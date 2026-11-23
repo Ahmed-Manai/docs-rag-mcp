@@ -6,13 +6,13 @@ on:
 
 permissions:
   contents: write
-  id-token: write # lets mcp-publisher sign in to the MCP Registry as this repository
+  id-token: write # lets the job sign in to NuGet (trusted publishing) and the MCP Registry as this repository
 
 jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      NUGET_USER: ${{ vars.NUGET_USER }} # nuget.org account that owns the trusted publishing policy
       MCP_PUBLISHER_VERSION: v1.8.16
 
     steps:
@@ -54,13 +54,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg --title "$GITHUB_REF_NAME" --notes-file release-notes.md
 
+      # Trusted publishing: exchanges this workflow's GitHub token for a NuGet API key that expires after an hour.
+      - name: Sign in to NuGet
+        id: nuget-login
+        if: env.NUGET_USER != ''
+        uses: NuGet/login@v1
+        with:
+          user: ${{ env.NUGET_USER }}
+
       - name: Publish to NuGet
-        if: env.NUGET_API_KEY != ''
+        if: env.NUGET_USER != ''
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: dotnet nuget push artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       # The registry checks the package README on nuget.org, which appears only after NuGet's validation.
       - name: Wait for the package on nuget.org
-        if: env.NUGET_API_KEY != ''
+        if: env.NUGET_USER != ''
         run: |
           url="https://api.nuget.org/v3-flatcontainer/docsragmcp/$VERSION/readme"
           for attempt in $(seq 1 60); do
@@ -75,11 +85,11 @@ jobs:
           exit 1
 
       - name: Install cosign
-        if: env.NUGET_API_KEY != ''
+        if: env.NUGET_USER != ''
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Download and verify mcp-publisher
-        if: env.NUGET_API_KEY != ''
+        if: env.NUGET_USER != ''
         run: |
           set -euo pipefail
           archive="mcp-publisher_linux_amd64.tar.gz"
@@ -95,7 +105,7 @@ jobs:
           rm -f "$archive" "$archive.sigstore.json"
 
       - name: Publish to the MCP Registry
-        if: env.NUGET_API_KEY != ''
+        if: env.NUGET_USER != ''
         run: |
           ./mcp-publisher login github-oidc
           cd src/DocsRagMcp/.mcp
