@@ -1,0 +1,49 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.Ahmed-Manai/docs-rag-mcp",
+  "description": "Search your own documents (Markdown, text, PDF) with RAG from Claude, Copilot or Cursor.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/Ahmed-Manai/docs-rag-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "nuget",
+      "identifier": "DocsRagMcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "DOCSRAG_PROVIDER",
+          "description": "Embedding provider: ollama (default), openai or azure.",
+          "default": "ollama",
+          "choices": ["ollama", "openai", "azure"]
+        },
+        {
+          "name": "DOCSRAG_MODEL",
+          "description": "Embedding model, or the deployment name for Azure OpenAI. Defaults to nomic-embed-text (Ollama) or text-embedding-3-small (OpenAI)."
+        },
+        {
+          "name": "DOCSRAG_ENDPOINT",
+          "description": "Service URL. Required for Azure OpenAI; optional for Ollama (http://localhost:11434) and OpenAI-compatible APIs."
+        },
+        {
+          "name": "DOCSRAG_API_KEY",
+          "description": "API key for OpenAI or Azure OpenAI. Leave it out for Azure to sign in with Microsoft Entra ID.",
+          "isSecret": true
+        },
+        {
+          "name": "DOCSRAG_ALLOWED_PATHS",
+          "description": "Folders the server may index, separated by ; on Windows or : on macOS and Linux."
+        },
+        {
+          "name": "DOCSRAG_DATABASE",
+          "description": "Path of the SQLite index file. Defaults to ~/.docs-rag-mcp/index.db."
+        }
+      ]
+    }
+  ]
+}
