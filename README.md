@@ -21,6 +21,7 @@ Point it at a folder of Markdown, text or PDF files. It splits them into passage
 - **Runs fully local** with [Ollama](https://ollama.com), or uses OpenAI or Azure OpenAI embeddings
 - **One file, no database server**: the index is a single SQLite file
 - **Incremental**: re-indexing only embeds files that changed, and drops files you deleted
+- **Stays in sync**: indexed folders are watched, so new, edited and deleted files are picked up on their own, even changes made while the server was stopped
 - **Cites its sources**: every passage comes with its file path and heading or PDF page
 - **Hybrid search**: ranks by meaning and by keywords, so exact terms such as API names and error codes are found too
 - **Safe by default for shared machines**: you can limit which folders it may read
@@ -144,10 +145,10 @@ Now ask your assistant: *"Index my notes in /path/to/your/notes"*, then ask ques
 
 | Tool | What it does |
 |------|--------------|
-| `index_folder` | Indexes the Markdown, text and PDF files in a folder and its subfolders. Unchanged files are skipped and deleted files are removed. |
+| `index_folder` | Indexes the Markdown, text and PDF files in a folder and its subfolders. Unchanged files are skipped and deleted files are removed. The folder is then watched and kept in sync. |
 | `search_docs` | Returns the passages closest in meaning to a question, with file, section and score. Optional `topK` (1-20) and `folder` filter. |
-| `list_sources` | Lists the indexed files with their number of chunks and when they were indexed. |
-| `remove_from_index` | Removes a file, or every file in a folder, from the index. Files on disk are never touched. |
+| `list_sources` | Lists the indexed files with their number of chunks and when they were indexed, and the watched folders. |
+| `remove_from_index` | Removes a file, or every file in a folder, from the index, and stops watching the folder. Files on disk are never touched. |
 
 `search_docs` and `list_sources` are marked read-only and `remove_from_index` destructive, so clients can decide when to ask you for confirmation.
 
@@ -166,6 +167,7 @@ Settings come from environment variables (or the matching command-line switch, s
 | `DOCSRAG_CHUNK_SIZE` | `1200` | Maximum characters per chunk |
 | `DOCSRAG_CHUNK_OVERLAP` | `200` | Characters repeated between consecutive chunks |
 | `DOCSRAG_SEARCH_MODE` | `hybrid` | `hybrid` combines keyword and vector ranking; `vector` uses vector similarity only |
+| `DOCSRAG_WATCH` | `true` | Watch indexed folders and index changes automatically. Set to `false` to index only when `index_folder` is called |
 
 ### OpenAI
 
@@ -213,6 +215,7 @@ Without `DOCSRAG_API_KEY`, the server signs in with Microsoft Entra ID through `
 - **Brute-force cosine search over SQLite.** Vectors are stored as blobs and compared with `TensorPrimitives.CosineSimilarity`, which uses SIMD. For personal and team document sets (up to tens of thousands of chunks) this stays fast and needs no native vector extension. A vector index is on the roadmap for larger sets.
 - **Hybrid ranking.** Embeddings are good at meaning but can miss exact terms: in testing, "require a login" matched a page about *logging*. Each chunk is therefore also indexed with SQLite's built-in FTS5 full-text search (porter stemming, headings weighted twice as much as body text). A search scores the candidates both ways, scales both scores to 0..1 and blends them 90% meaning, 10% keywords. Keywords settle close calls without outvoting a clearly better meaning match. Reciprocal rank fusion was tried first, but it let any passage that shared a word with the question beat the best meaning match, and it pushed correct answers down on plain-language questions. The score shown next to each passage is still the cosine similarity.
 - **Content hashes make re-indexing cheap.** Each file's SHA-256 is stored, so running `index_folder` again only calls the embedding model for files that changed.
+- **Watching reuses the same sync.** Indexed folders are stored in the index and watched with `FileSystemWatcher`. Events only say *that* something changed: they arrive in bursts, can be lost when too many come at once, and differ between Windows, macOS and Linux. So instead of handling events one by one, the watcher waits until the folder has been quiet for 2 seconds and then runs the normal sync, which uses the content hashes to re-embed only what changed. When the server starts, it runs that sync once per folder to catch up on changes made while it was stopped. Changes in hidden and skipped folders, and to the index file itself, are ignored.
 - **Provider-agnostic.** The server depends only on `IEmbeddingGenerator` from [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai). Supporting another provider means changing one factory class.
 
 ## Development

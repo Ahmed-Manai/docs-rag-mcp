@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-11-24
+
+- Watch mode: folders indexed with `index_folder` are remembered and watched. New, changed and deleted files are indexed automatically a couple of seconds after the folder goes quiet, and changes made while the server was stopped are picked up when it starts. Only files whose content changed are embedded again.
+- `DOCSRAG_WATCH` (`--watch`): `true` (default), or `false` to index only when `index_folder` is called
+- `list_sources` also lists the watched folders, and `remove_from_index` stops watching a folder it removes
+- Indexes built with 0.2.0 work as they are; their folders are watched once they are indexed again with `index_folder`
+
 ## 0.2.0 - 2026-11-24
 
 - Hybrid search: `search_docs` now blends vector similarity with keyword matching (SQLite FTS5 with BM25). When passages are about equally close in meaning, the one that uses the exact terms of the question, including in its heading, comes first. On the MCP C# SDK docs evaluation, the right page is now in the top 3 for 17 of 22 questions instead of 15; on the handbook evaluation every answer stays first.

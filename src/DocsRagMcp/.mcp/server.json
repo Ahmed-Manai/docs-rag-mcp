@@ -3,7 +3,7 @@
   "name": "io.github.Ahmed-Manai/docs-rag-mcp",
   "title": "Docs RAG",
   "description": "Search your own documents (Markdown, text, PDF) with RAG from Claude, Copilot or Cursor.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repository": {
     "url": "https://github.com/Ahmed-Manai/docs-rag-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "nuget",
       "identifier": "DocsRagMcp",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "transport": {
         "type": "stdio"
       },
@@ -49,6 +49,12 @@
           "description": "hybrid (default) combines keyword and vector ranking; vector uses vector similarity only.",
           "default": "hybrid",
           "choices": ["hybrid", "vector"]
+        },
+        {
+          "name": "DOCSRAG_WATCH",
+          "description": "true (default) watches indexed folders and indexes changes automatically; false indexes only when index_folder is called.",
+          "default": "true",
+          "choices": ["true", "false"]
         }
       ]
     }

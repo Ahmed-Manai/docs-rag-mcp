@@ -13,6 +13,7 @@ namespace DocsRagMcp.Tools;
 [McpServerToolType]
 public sealed class DocsTools(
     DocumentIndexer indexer,
+    FolderWatcher watcher,
     ChunkStore store,
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     DocsRagOptions options)
@@ -22,11 +23,21 @@ public sealed class DocsTools(
     [McpServerTool(Name = "index_folder", Idempotent = true)]
     [Description(
         "Indexes the documents in a folder and its subfolders (Markdown, text and PDF files) so they can be searched with search_docs. " +
-        "Files that haven't changed since the last run are skipped, and files that were deleted are removed from the index.")]
+        "Files that haven't changed since the last run are skipped, and files that were deleted are removed from the index. " +
+        "Unless watching is turned off, the folder is then watched and changes to its files are indexed automatically.")]
     public Task<string> IndexFolderAsync(
         [Description("Absolute path of the folder to index.")] string path,
         CancellationToken cancellationToken = default) =>
-        RunAsync(async () => FormatReport(await indexer.IndexFolderAsync(path, cancellationToken)));
+        RunAsync(async () =>
+        {
+            var report = await indexer.IndexFolderAsync(path, cancellationToken);
+            watcher.Watch(report.Folder);
+
+            var text = FormatReport(report);
+            return watcher.IsWatching(report.Folder)
+                ? text + "\nThe folder is watched: changes to its files are indexed automatically."
+                : text;
+        });
 
     [McpServerTool(Name = "search_docs", ReadOnly = true)]
     [Description(
@@ -77,23 +88,59 @@ public sealed class DocsTools(
                 text.Append(CultureInfo.InvariantCulture, $"- {source.Path} ({source.ChunkCount} chunks, indexed {source.IndexedAt:yyyy-MM-dd HH:mm} UTC)\n");
             }
 
+            var watched = watcher.WatchedFolders;
+            if (watched.Count > 0)
+            {
+                text.Append("\nWatched folders (changes are indexed automatically):\n");
+                foreach (var folder in watched)
+                {
+                    text.Append("- ").Append(folder).Append('\n');
+                }
+            }
+
             return text.ToString().TrimEnd();
         });
 
     [McpServerTool(Name = "remove_from_index", Destructive = true, Idempotent = true)]
-    [Description("Removes a file, or every file inside a folder, from the index. Files on disk are not touched.")]
+    [Description(
+        "Removes a file, or every file inside a folder, from the index, and stops watching the folder. " +
+        "Files on disk are not touched.")]
     public Task<string> RemoveFromIndexAsync(
         [Description("Absolute path of the file or folder to remove from the index.")] string path,
         CancellationToken cancellationToken = default) =>
         RunAsync(async () =>
         {
-            var removed = await store.RemoveAsync(PathUtils.Normalize(path), cancellationToken);
-            return removed.Count switch
+            var target = PathUtils.Normalize(path);
+
+            // Stop watching first, so no new sync starts while the files are being removed.
+            watcher.Unwatch(target);
+            var removed = await indexer.RemoveAsync(target, cancellationToken);
+
+            if (removed.Files.Count == 0 && removed.Folders.Count == 0)
             {
-                0 => $"Nothing in the index matches {path}.",
-                1 => $"Removed {removed[0]} from the index.",
-                _ => $"Removed {removed.Count} files from the index.",
-            };
+                return $"Nothing in the index matches {path}.";
+            }
+
+            var text = new StringBuilder(removed.Files.Count switch
+            {
+                0 => "No files were indexed there.",
+                1 => $"Removed {removed.Files[0]} from the index.",
+                _ => string.Create(CultureInfo.InvariantCulture, $"Removed {removed.Files.Count} files from the index."),
+            });
+
+            if (removed.Folders.Count > 0)
+            {
+                text.Append(" Stopped watching ").AppendJoin(", ", removed.Folders).Append('.');
+            }
+
+            if (watcher.IsWatching(target))
+            {
+                text.Append(
+                    " It is inside a watched folder, so it is indexed again the next time it changes. " +
+                    "To keep it out, delete it or remove the whole folder from the index.");
+            }
+
+            return text.ToString();
         });
 
     public static string FormatReport(IndexReport report)

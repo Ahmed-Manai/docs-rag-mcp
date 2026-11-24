@@ -15,6 +15,8 @@ public sealed record IndexReport(
     int Chunks,
     IReadOnlyList<string> Failed);
 
+public sealed record RemoveReport(IReadOnlyList<string> Files, IReadOnlyList<string> Folders);
+
 /// <summary>
 /// Keeps the index in sync with a folder: new and changed files are read, chunked and embedded,
 /// unchanged files are skipped by content hash, and deleted files are removed.
@@ -42,13 +44,50 @@ public sealed class DocumentIndexer(
     // One indexing run at a time: two runs over the same folder would race on the same files.
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public async Task<IndexReport> IndexFolderAsync(string folder, CancellationToken cancellationToken = default)
+    /// <summary>Indexes a folder and remembers it, so it can be watched and kept in sync.</summary>
+    public async Task<IndexReport> IndexFolderAsync(string folder, CancellationToken cancellationToken = default) =>
+        (await IndexAsync(folder, onlyIfRemembered: false, cancellationToken))!;
+
+    /// <summary>
+    /// Brings a remembered folder up to date. Returns null, without indexing anything, when the folder
+    /// was removed from the index in the meantime, so a sync that was waiting for a removal to finish
+    /// doesn't add the files back.
+    /// </summary>
+    public Task<IndexReport?> SyncFolderAsync(string folder, CancellationToken cancellationToken = default) =>
+        IndexAsync(folder, onlyIfRemembered: true, cancellationToken);
+
+    /// <summary>Removes a file, or a folder with every file inside it, from the index.</summary>
+    public async Task<RemoveReport> RemoveAsync(string pathOrFolder, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var files = await store.RemoveAsync(pathOrFolder, cancellationToken);
+            var folders = await store.RemoveFoldersAsync(pathOrFolder, cancellationToken);
+            return new RemoveReport(files, folders);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Hidden folders, and folders such as node_modules and bin, are never indexed.</summary>
+    public static bool IsSkippedFolder(string name) => name.StartsWith('.') || SkippedFolders.Contains(name);
+
+    private async Task<IndexReport?> IndexAsync(string folder, bool onlyIfRemembered, CancellationToken cancellationToken)
     {
         var root = pathGuard.ResolveFolder(folder);
 
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            if (onlyIfRemembered &&
+                !(await store.ListFoldersAsync(cancellationToken)).Any(remembered => PathUtils.IsSameOrUnder(root, remembered)))
+            {
+                return null;
+            }
+
             await store.CheckEmbeddingModelAsync(options.EmbeddingModelId, claimIfUnset: true, cancellationToken);
 
             int added = 0, updated = 0, unchanged = 0, chunkCount = 0;
@@ -108,6 +147,7 @@ public sealed class DocumentIndexer(
                 await store.RemoveAsync(path, cancellationToken);
             }
 
+            await store.AddFolderAsync(root, cancellationToken);
             return new IndexReport(root, added, updated, unchanged, deleted.Count, chunkCount, failed);
         }
         finally
@@ -165,8 +205,7 @@ public sealed class DocumentIndexer(
 
             foreach (var subfolder in Directory.EnumerateDirectories(folder, "*", ShallowEnumeration).Order(StringComparer.Ordinal).Reverse())
             {
-                var name = Path.GetFileName(subfolder);
-                if (!name.StartsWith('.') && !SkippedFolders.Contains(name))
+                if (!IsSkippedFolder(Path.GetFileName(subfolder)))
                 {
                     pending.Push(subfolder);
                 }
