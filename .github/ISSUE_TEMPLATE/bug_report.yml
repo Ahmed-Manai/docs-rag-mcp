@@ -1,0 +1,55 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Configure the server with ...
+        2. Ask the assistant to ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: docs-rag-mcp version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Embedding provider
+      options:
+        - Ollama
+        - OpenAI
+        - Azure OpenAI
+        - Other OpenAI-compatible API
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      placeholder: Claude Desktop, VS Code, Cursor, Claude Code...
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, macOS 15, Ubuntu 24.04...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The server writes its logs to stderr. Your MCP client usually shows them. Remove any API keys before pasting.
+      render: text
