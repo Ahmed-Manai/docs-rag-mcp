@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="docs-rag-mcp logo" width="120">
+</p>
+
 # docs-rag-mcp
 
 [![CI](https://github.com/Ahmed-Manai/docs-rag-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Ahmed-Manai/docs-rag-mcp/actions/workflows/ci.yml)
@@ -245,7 +249,7 @@ samples/                      sample documents and the smoke test
 - A vector index for very large document sets
 - Exposing indexed files as MCP resources
 
-Contributions are welcome. Open an issue to discuss an idea first.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started, pick a [good first issue](https://github.com/Ahmed-Manai/docs-rag-mcp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), or share an idea in [Discussions](https://github.com/Ahmed-Manai/docs-rag-mcp/discussions).
 
 ## License
 
