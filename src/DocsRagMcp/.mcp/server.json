@@ -3,7 +3,7 @@
   "name": "io.github.Ahmed-Manai/docs-rag-mcp",
   "title": "Docs RAG",
   "description": "Search your own documents (Markdown, text, PDF) with RAG from Claude, Copilot or Cursor.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "repository": {
     "url": "https://github.com/Ahmed-Manai/docs-rag-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "nuget",
       "identifier": "DocsRagMcp",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
@@ -43,6 +43,12 @@
         {
           "name": "DOCSRAG_DATABASE",
           "description": "Path of the SQLite index file. Defaults to ~/.docs-rag-mcp/index.db."
+        },
+        {
+          "name": "DOCSRAG_SEARCH_MODE",
+          "description": "hybrid (default) combines keyword and vector ranking; vector uses vector similarity only.",
+          "default": "hybrid",
+          "choices": ["hybrid", "vector"]
         }
       ]
     }

@@ -16,6 +16,17 @@ public class DocsRagOptionsTests
         Assert.Empty(options.AllowedPaths);
     }
 
+    [Theory]
+    [InlineData(null, SearchMode.Hybrid)]
+    [InlineData("hybrid", SearchMode.Hybrid)]
+    [InlineData("VECTOR", SearchMode.Vector)]
+    public void Search_mode_defaults_to_hybrid(string? value, SearchMode expected)
+    {
+        var options = value is null ? Parse() : Parse(("SEARCH_MODE", value));
+
+        Assert.Equal(expected, options.SearchMode);
+    }
+
     [Fact]
     public void Azure_needs_an_endpoint_and_a_deployment_name()
     {
@@ -41,6 +52,7 @@ public class DocsRagOptionsTests
     [InlineData("CHUNK_OVERLAP", "900")]
     [InlineData("CHUNK_SIZE", "large")]
     [InlineData("PROVIDER", "gemini")]
+    [InlineData("SEARCH_MODE", "keyword")]
     [InlineData("ENDPOINT", "not a url")]
     public void Invalid_settings_are_rejected_with_a_clear_message(string key, string value)
     {

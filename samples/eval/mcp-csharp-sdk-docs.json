@@ -1,0 +1,32 @@
+{
+  "description": "Developer questions about the official MCP C# SDK, answered from its conceptual docs. Each question lists the page that answers it. Questions are written the way a developer would ask, so some reuse the docs' own words and some don't.",
+  "source": {
+    "repository": "https://github.com/modelcontextprotocol/csharp-sdk",
+    "commit": "64cfd66b147553d8cf953f9e2a374aae96014968",
+    "folder": "docs"
+  },
+  "questions": [
+    { "question": "How can a slow tool tell the client how far along it is?", "expected": ["concepts/progress/progress.md"] },
+    { "question": "How do I stop a tool when the user gives up waiting?", "expected": ["concepts/cancellation/cancellation.md"] },
+    { "question": "How do I count every tool call for my metrics dashboard?", "expected": ["concepts/filters.md"] },
+    { "question": "How do I let a tool ask the user for missing information in the middle of a call?", "expected": ["concepts/elicitation/elicitation.md"] },
+    { "question": "How do I protect my HTTP server so only signed-in users can call it?", "expected": ["concepts/identity/identity.md"] },
+    { "question": "How do I make my MCP server require a login?", "expected": ["concepts/identity/identity.md"] },
+    { "question": "How do I restrict a tool to admins only?", "expected": ["concepts/identity/identity.md"] },
+    { "question": "How do I run my MCP server in a container?", "expected": ["concepts/deployment/docker.md"] },
+    { "question": "Can my server ask the client's language model to generate text?", "expected": ["concepts/sampling/sampling.md"] },
+    { "question": "How do I tell connected clients that the list of tools changed?", "expected": ["concepts/tools/tools.md"] },
+    { "question": "How do I return a long list of resources a page at a time?", "expected": ["concepts/pagination/pagination.md"] },
+    { "question": "How do I check that the server is still alive?", "expected": ["concepts/ping/ping.md"] },
+    { "question": "How do I expose files that the model can read?", "expected": ["concepts/resources/resources.md"] },
+    { "question": "How do I offer autocomplete suggestions for prompt arguments?", "expected": ["concepts/completions/completions.md"] },
+    { "question": "How do I run a long job in the background and fetch the result later?", "expected": ["concepts/tasks/tasks.md"] },
+    { "question": "Which transport should I use for a local command-line server?", "expected": ["concepts/transports/transports.md"] },
+    { "question": "Do I need sticky sessions when I scale out behind a load balancer?", "expected": ["concepts/stateless/stateless.md"] },
+    { "question": "How does the server find out which folders the user has open in their editor?", "expected": ["concepts/roots/roots.md"] },
+    { "question": "How do I silence the build warnings about experimental APIs?", "expected": ["experimental.md", "list-of-diagnostics.md"] },
+    { "question": "How do I send log messages that the client can show?", "expected": ["concepts/logging/logging.md"] },
+    { "question": "How do I define a reusable prompt template on the server?", "expected": ["concepts/prompts/prompts.md"] },
+    { "question": "How can a tool show an interactive UI to the user?", "expected": ["concepts/apps/apps.md"] }
+  ]
+}

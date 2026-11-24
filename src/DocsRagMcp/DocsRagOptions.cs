@@ -9,6 +9,15 @@ public enum EmbeddingProvider
     AzureOpenAI,
 }
 
+public enum SearchMode
+{
+    /// <summary>Combines vector similarity with keyword matching (the default).</summary>
+    Hybrid,
+
+    /// <summary>Ranks by vector similarity only.</summary>
+    Vector,
+}
+
 /// <summary>Thrown when the server settings are missing or invalid.</summary>
 public sealed class DocsRagConfigurationException(string message) : Exception(message);
 
@@ -29,6 +38,7 @@ public sealed record DocsRagOptions
         ["--allowed-paths"] = "ALLOWED_PATHS",
         ["--chunk-size"] = "CHUNK_SIZE",
         ["--chunk-overlap"] = "CHUNK_OVERLAP",
+        ["--search-mode"] = "SEARCH_MODE",
     };
 
     public EmbeddingProvider Provider { get; init; } = EmbeddingProvider.Ollama;
@@ -46,6 +56,8 @@ public sealed record DocsRagOptions
     public int ChunkSize { get; init; } = 1200;
 
     public int ChunkOverlap { get; init; } = 200;
+
+    public SearchMode SearchMode { get; init; } = SearchMode.Hybrid;
 
     /// <summary>
     /// Identifies the embedding model, so an index is never searched with vectors from a different model.
@@ -123,6 +135,8 @@ public sealed record DocsRagOptions
                 "DOCSRAG_CHUNK_OVERLAP must be between 0 and half of DOCSRAG_CHUNK_SIZE.");
         }
 
+        var searchMode = ParseSearchMode(Value(config, "SEARCH_MODE"));
+
         var allowedPaths = (Value(config, "ALLOWED_PATHS") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(PathUtils.Normalize)
@@ -138,6 +152,7 @@ public sealed record DocsRagOptions
             AllowedPaths = allowedPaths,
             ChunkSize = chunkSize,
             ChunkOverlap = chunkOverlap,
+            SearchMode = searchMode,
         };
     }
 
@@ -149,6 +164,15 @@ public sealed record DocsRagOptions
             "azure" or "azure-openai" or "azureopenai" => EmbeddingProvider.AzureOpenAI,
             _ => throw new DocsRagConfigurationException(
                 $"Unknown DOCSRAG_PROVIDER '{value}'. Use ollama, openai or azure."),
+        };
+
+    private static SearchMode ParseSearchMode(string? value) =>
+        value?.ToLowerInvariant() switch
+        {
+            null or "hybrid" => SearchMode.Hybrid,
+            "vector" => SearchMode.Vector,
+            _ => throw new DocsRagConfigurationException(
+                $"Unknown DOCSRAG_SEARCH_MODE '{value}'. Use hybrid or vector."),
         };
 
     private static int ParseInt(IConfiguration config, string key, int defaultValue)
