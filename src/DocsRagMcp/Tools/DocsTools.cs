@@ -30,7 +30,7 @@ public sealed class DocsTools(
 
     [McpServerTool(Name = "search_docs", ReadOnly = true)]
     [Description(
-        "Searches the indexed documents by meaning and returns the most relevant passages, with their file and section. " +
+        "Searches the indexed documents by meaning and by keywords, and returns the most relevant passages with their file and section. " +
         "Use it to answer questions from the user's own documents, and cite the files you used.")]
     public Task<string> SearchDocsAsync(
         [Description("What to look for, as a question or a short phrase.")] string query,
@@ -53,7 +53,9 @@ public sealed class DocsTools(
 
             var vector = await embeddingGenerator.GenerateVectorAsync(query, cancellationToken: cancellationToken);
             var within = string.IsNullOrWhiteSpace(folder) ? null : PathUtils.Normalize(folder);
-            var hits = await store.SearchAsync(vector, Math.Clamp(topK, 1, MaxResults), within, cancellationToken);
+            var keywords = options.SearchMode == SearchMode.Hybrid ? query : null;
+            var hits = await store.SearchAsync(
+                vector, Math.Clamp(topK, 1, MaxResults), within, keywords, cancellationToken);
 
             return hits.Count == 0 ? "No matching passages found." : FormatHits(query, hits);
         });

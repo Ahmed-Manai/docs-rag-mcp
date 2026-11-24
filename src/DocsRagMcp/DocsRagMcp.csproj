@@ -11,7 +11,7 @@
     <PackageType>McpServer</PackageType>
 
     <PackageId>DocsRagMcp</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Ahmed Manai</Authors>
     <Description>MCP server that lets Claude, GitHub Copilot and Cursor search your own documents (Markdown, text, PDF) with RAG. Embeddings from Ollama, OpenAI or Azure OpenAI, stored in a local SQLite file.</Description>
     <PackageTags>mcp;model-context-protocol;rag;embeddings;semantic-search;ollama;openai;azure-openai;ai</PackageTags>

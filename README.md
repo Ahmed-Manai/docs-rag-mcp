@@ -22,6 +22,7 @@ Point it at a folder of Markdown, text or PDF files. It splits them into passage
 - **One file, no database server**: the index is a single SQLite file
 - **Incremental**: re-indexing only embeds files that changed, and drops files you deleted
 - **Cites its sources**: every passage comes with its file path and heading or PDF page
+- **Hybrid search**: ranks by meaning and by keywords, so exact terms such as API names and error codes are found too
 - **Safe by default for shared machines**: you can limit which folders it may read
 
 ## Example
@@ -164,6 +165,7 @@ Settings come from environment variables (or the matching command-line switch, s
 | `DOCSRAG_DATABASE` | `~/.docs-rag-mcp/index.db` | Where the index is stored |
 | `DOCSRAG_CHUNK_SIZE` | `1200` | Maximum characters per chunk |
 | `DOCSRAG_CHUNK_OVERLAP` | `200` | Characters repeated between consecutive chunks |
+| `DOCSRAG_SEARCH_MODE` | `hybrid` | `hybrid` combines keyword and vector ranking; `vector` uses vector similarity only |
 
 ### OpenAI
 
@@ -209,6 +211,7 @@ Without `DOCSRAG_API_KEY`, the server signs in with Microsoft Entra ID through `
 - **Chunking follows the document's structure.** Markdown is split at headings and PDFs by page before being cut into chunks, so every passage knows where it came from. Chunks break at paragraph boundaries when they can, and overlap a little so an idea that spans two chunks can still be found.
 - **Each chunk is embedded with its context.** The text sent to the embedding model starts with the file name and heading (for example `travel-and-expenses.md > Hotels`). A short passage like "220 EUR in Paris" then still matches a question about hotel budgets.
 - **Brute-force cosine search over SQLite.** Vectors are stored as blobs and compared with `TensorPrimitives.CosineSimilarity`, which uses SIMD. For personal and team document sets (up to tens of thousands of chunks) this stays fast and needs no native vector extension. A vector index is on the roadmap for larger sets.
+- **Hybrid ranking.** Embeddings are good at meaning but can miss exact terms: in testing, "require a login" matched a page about *logging*. Each chunk is therefore also indexed with SQLite's built-in FTS5 full-text search (porter stemming, headings weighted twice as much as body text). A search scores the candidates both ways, scales both scores to 0..1 and blends them 90% meaning, 10% keywords. Keywords settle close calls without outvoting a clearly better meaning match. Reciprocal rank fusion was tried first, but it let any passage that shared a word with the question beat the best meaning match, and it pushed correct answers down on plain-language questions. The score shown next to each passage is still the cosine similarity.
 - **Content hashes make re-indexing cheap.** Each file's SHA-256 is stored, so running `index_folder` again only calls the embedding model for files that changed.
 - **Provider-agnostic.** The server depends only on `IEmbeddingGenerator` from [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai). Supporting another provider means changing one factory class.
 
@@ -227,6 +230,30 @@ To check everything against a real model (Ollama by default):
 dotnet run samples/smoke.cs -- "How much can I spend on a hotel in Paris?"
 ```
 
+### Measuring search quality
+
+`samples/eval/` holds two sets of questions with known answers. The evaluation indexes the documents once and asks every question in both search modes:
+
+- `handbook.json`: 14 employee questions about the sample handbook, each with the section that answers it. Most use different words from the handbook.
+- `mcp-csharp-sdk-docs.json`: 22 developer questions about the [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk) documentation (30 pages, 556 chunks), each with the page that answers it.
+
+```bash
+dotnet run samples/eval/eval.cs -- samples/eval/handbook.json .
+
+git clone https://github.com/modelcontextprotocol/csharp-sdk /tmp/csharp-sdk
+git -C /tmp/csharp-sdk checkout 64cfd66b147553d8cf953f9e2a374aae96014968
+dotnet run samples/eval/eval.cs -- samples/eval/mcp-csharp-sdk-docs.json /tmp/csharp-sdk --details
+```
+
+Results with Ollama and `nomic-embed-text`:
+
+| Search mode | Handbook: right section first | SDK docs: right page first | SDK docs: right page in the top 3 | SDK docs: mean reciprocal rank |
+|---|---|---|---|---|
+| `vector` (0.1.0) | 14 of 14 | 11 of 22 | 15 of 22 | 0.61 |
+| `hybrid` (0.2.0) | 14 of 14 | 12 of 22 | 17 of 22 | 0.66 |
+
+Keyword matching helps most when the question names the feature, such as cancellation, elicitation or completions. It can't help when the question shares no distinctive word with the answer. Both sets are small, so treat these numbers as a direction, not a benchmark.
+
 ```text
 src/DocsRagMcp/
   Program.cs                  host, dependency injection, MCP server setup
@@ -236,16 +263,17 @@ src/DocsRagMcp/
   Indexing/PathGuard.cs       allowed-folder checks
   Ingestion/DocumentReader.cs Markdown, text and PDF reading
   Ingestion/TextChunker.cs    chunking with overlap
-  Storage/ChunkStore.cs       SQLite storage and vector search
+  Storage/ChunkStore.cs       SQLite storage, vector and keyword search, rank fusion
+  Storage/KeywordQuery.cs     turns a question into a safe FTS5 query
   Embeddings/                 Ollama, OpenAI and Azure OpenAI clients
 tests/DocsRagMcp.Tests/       unit and end-to-end tests
-samples/                      sample documents and the smoke test
+samples/                      sample documents, the smoke test and the search evaluation
 ```
 
 ## Roadmap
 
 - Word (`.docx`) and HTML files
-- Hybrid search that combines keyword (SQLite FTS5) and vector scores
+- Reranking the top results with a cross-encoder model
 - A vector index for very large document sets
 - Exposing indexed files as MCP resources
 

@@ -1,0 +1,22 @@
+{
+  "description": "Employee questions about the sample handbook in samples/handbook. Each question lists the section that answers it, as 'file > heading'. Most questions use different words from the handbook.",
+  "source": {
+    "folder": "samples/handbook"
+  },
+  "questions": [
+    { "question": "Can I spend a month working from Spain?", "expected": ["remote-work.md > Working from another country"] },
+    { "question": "Can I expense a beer with dinner on a work trip?", "expected": ["travel-and-expenses.md > Meals"] },
+    { "question": "What is the daily meal allowance when travelling?", "expected": ["travel-and-expenses.md > Meals"] },
+    { "question": "How much can I spend on a hotel in Paris?", "expected": ["travel-and-expenses.md > Hotels"] },
+    { "question": "Is breakfast included in the hotel limit?", "expected": ["travel-and-expenses.md > Hotels"] },
+    { "question": "When do I get my money back after a trip?", "expected": ["travel-and-expenses.md > Getting paid back"] },
+    { "question": "Can I fly business class to Tokyo?", "expected": ["travel-and-expenses.md > Booking travel"] },
+    { "question": "How many days a week can I stay home?", "expected": ["remote-work.md > Remote work"] },
+    { "question": "Will the company pay for a new desk chair?", "expected": ["remote-work.md > Home office equipment"] },
+    { "question": "When do I have to be online during the day?", "expected": ["remote-work.md > Core hours"] },
+    { "question": "Who gives me my laptop on my first morning?", "expected": ["onboarding.md > Day one"] },
+    { "question": "When can I get access to production systems?", "expected": ["onboarding.md > Accounts and access"] },
+    { "question": "Who can I ask the questions I don't want to ask my boss?", "expected": ["onboarding.md > Your buddy"] },
+    { "question": "When do we agree on my goals for the first three months?", "expected": ["onboarding.md > End of the first week"] }
+  ]
+}

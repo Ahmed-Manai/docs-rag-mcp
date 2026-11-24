@@ -40,7 +40,10 @@ builder.Services
 
 var app = builder.Build();
 app.Services.GetRequiredService<ILogger<DocsRagOptions>>().LogInformation(
-    "docs-rag-mcp is using {Model} and the index at {Database}", options.EmbeddingModelId, options.DatabasePath);
+    "docs-rag-mcp is using {Model}, {SearchMode} search and the index at {Database}",
+    options.EmbeddingModelId,
+    options.SearchMode.ToString().ToLowerInvariant(),
+    options.DatabasePath);
 
 await app.RunAsync();
 return 0;
