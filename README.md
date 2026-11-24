@@ -4,6 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet)
 ![MCP](https://img.shields.io/badge/MCP-server-black)
+[![NuGet](https://img.shields.io/nuget/v/DocsRagMcp?logo=nuget)](https://www.nuget.org/packages/DocsRagMcp)
+
+[![Ahmed-Manai/docs-rag-mcp MCP server](https://glama.ai/mcp/servers/Ahmed-Manai/docs-rag-mcp/badges/card.svg)](https://glama.ai/mcp/servers/Ahmed-Manai/docs-rag-mcp)
 
 <!-- mcp-name: io.github.Ahmed-Manai/docs-rag-mcp -->
 
