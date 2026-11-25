@@ -240,7 +240,8 @@ public class DocumentReaderTests
     [InlineData("REPORT.PDF", true)]
     [InlineData("notes.txt", true)]
     [InlineData("Program.cs", false)]
-    [InlineData("contract.docx", false)]
+    [InlineData("contract.docx", true)]
+    [InlineData("contract.doc", false)]
     public void Supported_file_types(string fileName, bool supported)
     {
         Assert.Equal(supported, DocumentReader.IsSupported(fileName));

@@ -16,7 +16,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server, written in C#, that lets Claude, GitHub Copilot, Cursor and other AI assistants search **your own documents** with retrieval-augmented generation (RAG).
 
-Point it at a folder of Markdown, text, HTML or PDF files. It splits them into passages, turns each passage into an embedding, and stores everything in a local SQLite file. When you ask your assistant a question, it calls `search_docs`, gets back the most relevant passages with their file and section, and answers from them.
+Point it at a folder of Markdown, text, HTML, Word or PDF files. It splits them into passages, turns each passage into an embedding, and stores everything in a local SQLite file. When you ask your assistant a question, it calls `search_docs`, gets back the most relevant passages with their file and section, and answers from them.
 
 - **Runs fully local** with [Ollama](https://ollama.com), or uses OpenAI or Azure OpenAI embeddings
 - **One file, no database server**: the index is a single SQLite file
@@ -24,6 +24,7 @@ Point it at a folder of Markdown, text, HTML or PDF files. It splits them into p
 - **Stays in sync**: indexed folders are watched, so new, edited and deleted files are picked up on their own, even changes made while the server was stopped
 - **Cites its sources**: every passage comes with its file path and heading or PDF page
 - **Reads HTML too**: saved web pages and generated docs sites are split at their headings, without scripts, styles, menus, headers and footers
+- **Reads Word documents**: `.docx` files are split at their Title and Heading 1 to 3 paragraphs, in any language version of Word, with lists and tables kept readable
 - **Ignores front matter**: YAML front matter from Jekyll, Hugo, Docusaurus or Obsidian is left out of the index, and its `title` names the text before the first heading
 - **Hybrid search**: ranks by meaning and by keywords, so exact terms such as API names and error codes are found too
 - **Safe by default for shared machines**: you can limit which folders it may read
@@ -52,7 +53,7 @@ Neither "Spain" nor "month" appears in the document. The search matches on meani
 ```mermaid
 flowchart LR
     A[AI assistant<br/>Claude, Copilot, Cursor] -- MCP over stdio --> B[docs-rag-mcp]
-    B -- index_folder --> C[Read .md / .txt / .html / .pdf<br/>split by heading or page<br/>chunk with overlap]
+    B -- index_folder --> C[Read .md / .txt / .html / .docx / .pdf<br/>split by heading or page<br/>chunk with overlap]
     C --> D[Embedding model<br/>Ollama, OpenAI, Azure OpenAI]
     D --> E[(SQLite<br/>chunks + vectors)]
     B -- search_docs --> D
@@ -147,7 +148,7 @@ Now ask your assistant: *"Index my notes in /path/to/your/notes"*, then ask ques
 
 | Tool | What it does |
 |------|--------------|
-| `index_folder` | Indexes the Markdown, text, HTML and PDF files in a folder and its subfolders. Unchanged files are skipped and deleted files are removed. The folder is then watched and kept in sync. |
+| `index_folder` | Indexes the Markdown, text, HTML, Word and PDF files in a folder and its subfolders. Unchanged files are skipped and deleted files are removed. The folder is then watched and kept in sync. |
 | `search_docs` | Returns the passages closest in meaning to a question, with file, section and score. Optional `topK` (1-20) and `folder` filter. |
 | `list_sources` | Shows where the index is, its size and the embedding model that built it, then lists the indexed files with their number of chunks and when they were indexed, and the watched folders. |
 | `remove_from_index` | Removes a file, or every file in a folder, from the index, and stops watching the folder. Files on disk are never touched. |
@@ -212,7 +213,7 @@ Without `DOCSRAG_API_KEY`, the server signs in with Microsoft Entra ID through `
 
 ## Design notes
 
-- **Chunking follows the document's structure.** Markdown and HTML are split at headings and PDFs by page before being cut into chunks, so every passage knows where it came from. Chunks break at paragraph boundaries when they can, and overlap a little so an idea that spans two chunks can still be found.
+- **Chunking follows the document's structure.** Markdown, HTML and Word documents are split at headings and PDFs by page before being cut into chunks, so every passage knows where it came from. Chunks break at paragraph boundaries when they can, and overlap a little so an idea that spans two chunks can still be found.
 - **Each chunk is embedded with its context.** The text sent to the embedding model starts with the file name and heading (for example `travel-and-expenses.md > Hotels`). A short passage like "220 EUR in Paris" then still matches a question about hotel budgets.
 - **Brute-force cosine search over SQLite.** Vectors are stored as blobs and compared with `TensorPrimitives.CosineSimilarity`, which uses SIMD. For personal and team document sets (up to tens of thousands of chunks) this stays fast and needs no native vector extension. A vector index is on the roadmap for larger sets.
 - **Hybrid ranking.** Embeddings are good at meaning but can miss exact terms: in testing, "require a login" matched a page about *logging*. Each chunk is therefore also indexed with SQLite's built-in FTS5 full-text search (porter stemming, headings weighted twice as much as body text). A search scores the candidates both ways, scales both scores to 0..1 and blends them 90% meaning, 10% keywords. Keywords settle close calls without outvoting a clearly better meaning match. Reciprocal rank fusion was tried first, but it let any passage that shared a word with the question beat the best meaning match, and it pushed correct answers down on plain-language questions. The score shown next to each passage is still the cosine similarity.
@@ -266,7 +267,7 @@ src/DocsRagMcp/
   Tools/DocsTools.cs          the four MCP tools
   Indexing/DocumentIndexer.cs folder sync: hash, read, chunk, embed, store
   Indexing/PathGuard.cs       allowed-folder checks
-  Ingestion/DocumentReader.cs Markdown, text, HTML and PDF reading
+  Ingestion/DocumentReader*.cs Markdown, text, HTML, Word and PDF reading
   Ingestion/TextChunker.cs    chunking with overlap
   Storage/ChunkStore.cs       SQLite storage, vector and keyword search, rank fusion
   Storage/KeywordQuery.cs     turns a question into a safe FTS5 query
