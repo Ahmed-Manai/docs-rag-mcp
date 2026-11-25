@@ -49,6 +49,65 @@ public class DocumentReaderTests
         Assert.Equal("Part one", part.Location);
     }
 
+    [Theory]
+    [InlineData("title: Travel policy")]
+    [InlineData("title: \"Travel policy\"")]
+    [InlineData("title: 'Travel policy'")]
+    public void Front_matter_is_left_out_and_its_title_names_the_text_before_the_first_heading(string titleLine)
+    {
+        var parts = DocumentReader.SplitMarkdown(
+            $"---\n{titleLine}\ntags: [hr, travel]\n---\n\nBook trips early.\n\n# Hotels\nUse the travel portal.\n");
+
+        Assert.Collection(
+            parts,
+            part =>
+            {
+                Assert.Equal("Travel policy", part.Location);
+                Assert.Equal("Book trips early.", part.Text);
+            },
+            part =>
+            {
+                Assert.Equal("Hotels", part.Location);
+                Assert.Equal("# Hotels\nUse the travel portal.", part.Text);
+            });
+    }
+
+    [Fact]
+    public void Front_matter_without_a_title_is_left_out()
+    {
+        var part = Assert.Single(DocumentReader.SplitMarkdown("---\r\nlayout: post\r\ndate: 2026-01-05\r\n...\r\n# Release notes\r\nFaster search."));
+
+        Assert.Equal("Release notes", part.Location);
+        Assert.Equal("# Release notes\nFaster search.", part.Text);
+    }
+
+    [Fact]
+    public void Horizontal_rule_later_in_the_file_is_kept()
+    {
+        var part = Assert.Single(DocumentReader.SplitMarkdown("Intro.\n\n---\n\ntitle: not front matter\n\n---\n\nMore text."));
+
+        Assert.Null(part.Location);
+        Assert.Equal("Intro.\n\n---\n\ntitle: not front matter\n\n---\n\nMore text.", part.Text);
+    }
+
+    [Fact]
+    public void Opening_rule_without_a_closing_one_is_kept()
+    {
+        var part = Assert.Single(DocumentReader.SplitMarkdown("---\ntitle: Draft\nStill writing this."));
+
+        Assert.Null(part.Location);
+        Assert.Contains("title: Draft", part.Text);
+    }
+
+    [Fact]
+    public void Multi_line_title_is_ignored()
+    {
+        var part = Assert.Single(DocumentReader.SplitMarkdown("---\ntitle: |\n  Long title\n---\nBody."));
+
+        Assert.Null(part.Location);
+        Assert.Equal("Body.", part.Text);
+    }
+
     [Fact]
     public void Pdf_is_read_page_by_page()
     {

@@ -71,6 +71,16 @@ public sealed class ChunkStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Embedding_model_is_known_once_it_is_claimed()
+    {
+        Assert.Null(await _store.GetEmbeddingModelAsync());
+
+        await _store.CheckEmbeddingModelAsync("ollama/model-a", claimIfUnset: true);
+
+        Assert.Equal("ollama/model-a", await _store.GetEmbeddingModelAsync());
+    }
+
+    [Fact]
     public async Task Empty_index_can_switch_embedding_model()
     {
         await _store.CheckEmbeddingModelAsync("ollama/model-a", claimIfUnset: true);

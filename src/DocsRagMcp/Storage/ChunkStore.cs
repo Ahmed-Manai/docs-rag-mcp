@@ -104,6 +104,14 @@ public sealed class ChunkStore
         BuildKeywordIndexIfMissing(connection);
     }
 
+    /// <summary>The embedding model the index was built with, or null if nothing was indexed yet.</summary>
+    public async Task<string?> GetEmbeddingModelAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        return (string?)await ScalarAsync(
+            connection, "SELECT value FROM metadata WHERE key = $key", cancellationToken, ("$key", EmbeddingModelKey));
+    }
+
     /// <summary>
     /// Makes sure the index is only ever used with one embedding model. An empty index adopts the
     /// configured model; an index that already holds vectors from another model is rejected.
