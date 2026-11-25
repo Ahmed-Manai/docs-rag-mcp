@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 - 2026-11-25
+
+- Word support: `.docx` files are indexed (#1). Documents are split at their Title and Heading 1 to 3 paragraphs, including custom styles based on a heading and headings set with an outline level, and the document title from its properties names the text before the first heading. Headings are found by the built-in style names, so documents from non-English versions of Word work too. List items become `- ` lines and table rows `cell | cell` lines; deleted text from tracked changes and field codes are left out
+- Word's `~$name.docx` lock files are skipped
+- No new dependency: a `.docx` file is a zip of XML parts, read with the .NET base library
+
 ## 0.5.0 - 2026-11-25
 
 - HTML support: `.html` and `.htm` files are indexed (#2). Pages are split at their `h1` to `h3` headings, and the page title names the text before the first heading. When the page marks its content with `<main>`, only that is read. Scripts, styles, navigation, hidden elements and the page's own header and footer are left out; a header inside an `article` or `main` element is kept, since it usually holds the title. Code blocks keep their indentation. The page's `<meta charset>` is respected

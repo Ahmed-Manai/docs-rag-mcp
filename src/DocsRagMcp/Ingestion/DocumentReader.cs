@@ -10,7 +10,7 @@ namespace DocsRagMcp.Ingestion;
 /// <summary>A piece of a document, with a readable location such as a Markdown heading or a PDF page.</summary>
 public sealed record DocumentPart(string Text, string? Location);
 
-/// <summary>Turns Markdown, plain-text, HTML and PDF files into text parts that keep track of where they came from.</summary>
+/// <summary>Turns Markdown, plain-text, HTML, Word and PDF files into text parts that keep track of where they came from.</summary>
 public static partial class DocumentReader
 {
     private static readonly HashSet<string> MarkdownExtensions =
@@ -23,10 +23,13 @@ public static partial class DocumentReader
         new(StringComparer.OrdinalIgnoreCase) { ".html", ".htm" };
 
     public static IReadOnlyCollection<string> SupportedExtensions { get; } =
-        [.. MarkdownExtensions, .. PlainTextExtensions, .. HtmlExtensions, ".pdf"];
+        [.. MarkdownExtensions, .. PlainTextExtensions, .. HtmlExtensions, ".docx", ".pdf"];
 
     public static bool IsSupported(string path) =>
-        SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+        SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)
+        // Word keeps a "~$name.docx" lock file next to an open document. It is hidden on Windows,
+        // but not on macOS or Linux, and it is not a document.
+        && !Path.GetFileName(path).StartsWith("~$", StringComparison.Ordinal);
 
     public static IReadOnlyList<DocumentPart> Read(string path)
     {
@@ -35,6 +38,12 @@ public static partial class DocumentReader
         if (extension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
         {
             return ReadPdf(path);
+        }
+
+        if (extension.Equals(".docx", StringComparison.OrdinalIgnoreCase))
+        {
+            using var stream = File.OpenRead(path);
+            return ReadWord(stream);
         }
 
         if (HtmlExtensions.Contains(extension))
