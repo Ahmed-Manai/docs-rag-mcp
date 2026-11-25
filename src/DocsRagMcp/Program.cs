@@ -30,6 +30,8 @@ builder.Services.AddSingleton(_ => new ChunkStore(options.DatabasePath));
 builder.Services.AddSingleton(_ => new TextChunker(options.ChunkSize, options.ChunkOverlap));
 builder.Services.AddSingleton(_ => new PathGuard(options.AllowedPaths));
 builder.Services.AddSingleton<DocumentIndexer>();
+builder.Services.AddSingleton<FolderWatcher>();
+builder.Services.AddHostedService(services => services.GetRequiredService<FolderWatcher>());
 
 builder.Services
     .AddMcpServer(server => server.ServerInstructions =
@@ -40,10 +42,11 @@ builder.Services
 
 var app = builder.Build();
 app.Services.GetRequiredService<ILogger<DocsRagOptions>>().LogInformation(
-    "docs-rag-mcp is using {Model}, {SearchMode} search and the index at {Database}",
+    "docs-rag-mcp is using {Model}, {SearchMode} search and the index at {Database}; folder watching is {Watch}",
     options.EmbeddingModelId,
     options.SearchMode.ToString().ToLowerInvariant(),
-    options.DatabasePath);
+    options.DatabasePath,
+    options.Watch ? "on" : "off");
 
 await app.RunAsync();
 return 0;

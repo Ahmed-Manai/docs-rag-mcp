@@ -39,6 +39,12 @@ public sealed class ChunkStore
         );
         CREATE INDEX IF NOT EXISTS ix_chunks_source_path ON chunks (source_path);
 
+        -- Folders indexed with index_folder, which are watched and kept in sync.
+        CREATE TABLE IF NOT EXISTS folders (
+            path       TEXT PRIMARY KEY,
+            indexed_at TEXT NOT NULL
+        );
+
         -- Full-text index over the chunks table, kept in sync by the triggers below. The porter
         -- tokenizer matches word forms, so "deploy" also finds "deploying" and "deployment".
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -162,7 +168,7 @@ public sealed class ChunkStore
             cancellationToken,
             ("$path", path),
             ("$hash", contentHash),
-            ("$indexedAt", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)));
+            ("$indexedAt", Now()));
 
         await using var insert = connection.CreateCommand();
         insert.CommandText = """
@@ -212,20 +218,42 @@ public sealed class ChunkStore
         return removed;
     }
 
-    public async Task<IReadOnlyList<string>> ListSourcePathsAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<string>> ListSourcePathsAsync(CancellationToken cancellationToken = default) =>
+        ListPathsAsync("SELECT path FROM sources ORDER BY path", cancellationToken);
+
+    /// <summary>Remembers a folder that was indexed, so it can be watched and kept in sync.</summary>
+    public async Task AddFolderAsync(string folder, CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT path FROM sources ORDER BY path";
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO folders (path, indexed_at) VALUES ($path, $indexedAt)
+            ON CONFLICT (path) DO UPDATE SET indexed_at = excluded.indexed_at
+            """,
+            cancellationToken,
+            ("$path", folder),
+            ("$indexedAt", Now()));
+    }
 
-        var paths = new List<string>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
+    /// <summary>The folders that were indexed, sorted by path so a folder comes before its subfolders.</summary>
+    public Task<IReadOnlyList<string>> ListFoldersAsync(CancellationToken cancellationToken = default) =>
+        ListPathsAsync("SELECT path FROM folders ORDER BY path", cancellationToken);
+
+    /// <summary>Forgets a folder and every indexed folder inside it. Returns the folders that were forgotten.</summary>
+    public async Task<IReadOnlyList<string>> RemoveFoldersAsync(string pathOrFolder, CancellationToken cancellationToken = default)
+    {
+        var removed = (await ListFoldersAsync(cancellationToken))
+            .Where(folder => PathUtils.IsSameOrUnder(folder, pathOrFolder))
+            .ToList();
+
+        await using var connection = await OpenAsync(cancellationToken);
+        foreach (var folder in removed)
         {
-            paths.Add(reader.GetString(0));
+            await ExecuteAsync(connection, "DELETE FROM folders WHERE path = $path", cancellationToken, ("$path", folder));
         }
 
-        return paths;
+        return removed;
     }
 
     public async Task<IReadOnlyList<SourceInfo>> ListSourcesAsync(CancellationToken cancellationToken = default)
@@ -441,6 +469,24 @@ public sealed class ChunkStore
         }
 
         transaction.Commit();
+    }
+
+    private static string Now() => DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+
+    private async Task<IReadOnlyList<string>> ListPathsAsync(string sql, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+
+        var paths = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            paths.Add(reader.GetString(0));
+        }
+
+        return paths;
     }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken cancellationToken)

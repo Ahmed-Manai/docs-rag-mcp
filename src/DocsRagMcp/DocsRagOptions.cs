@@ -39,6 +39,7 @@ public sealed record DocsRagOptions
         ["--chunk-size"] = "CHUNK_SIZE",
         ["--chunk-overlap"] = "CHUNK_OVERLAP",
         ["--search-mode"] = "SEARCH_MODE",
+        ["--watch"] = "WATCH",
     };
 
     public EmbeddingProvider Provider { get; init; } = EmbeddingProvider.Ollama;
@@ -58,6 +59,9 @@ public sealed record DocsRagOptions
     public int ChunkOverlap { get; init; } = 200;
 
     public SearchMode SearchMode { get; init; } = SearchMode.Hybrid;
+
+    /// <summary>Whether indexed folders are watched and re-synced when their files change.</summary>
+    public bool Watch { get; init; } = true;
 
     /// <summary>
     /// Identifies the embedding model, so an index is never searched with vectors from a different model.
@@ -136,6 +140,7 @@ public sealed record DocsRagOptions
         }
 
         var searchMode = ParseSearchMode(Value(config, "SEARCH_MODE"));
+        var watch = ParseSwitch(config, "WATCH", true);
 
         var allowedPaths = (Value(config, "ALLOWED_PATHS") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -153,6 +158,7 @@ public sealed record DocsRagOptions
             ChunkSize = chunkSize,
             ChunkOverlap = chunkOverlap,
             SearchMode = searchMode,
+            Watch = watch,
         };
     }
 
@@ -173,6 +179,16 @@ public sealed record DocsRagOptions
             "vector" => SearchMode.Vector,
             _ => throw new DocsRagConfigurationException(
                 $"Unknown DOCSRAG_SEARCH_MODE '{value}'. Use hybrid or vector."),
+        };
+
+    private static bool ParseSwitch(IConfiguration config, string key, bool defaultValue) =>
+        Value(config, key)?.ToLowerInvariant() switch
+        {
+            null => defaultValue,
+            "true" or "1" or "yes" or "on" => true,
+            "false" or "0" or "no" or "off" => false,
+            var value => throw new DocsRagConfigurationException(
+                $"DOCSRAG_{key} must be true or false, but was '{value}'."),
         };
 
     private static int ParseInt(IConfiguration config, string key, int defaultValue)

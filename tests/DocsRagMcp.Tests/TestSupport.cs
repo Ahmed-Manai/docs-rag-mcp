@@ -108,13 +108,14 @@ internal sealed class TestServer : IDisposable
 {
     private readonly TempFolder _data = new();
 
-    public TestServer(IEnumerable<string>? allowedPaths = null)
+    public TestServer(IEnumerable<string>? allowedPaths = null, bool watch = true)
     {
         Options = new DocsRagOptions
         {
             Provider = EmbeddingProvider.Ollama,
             Model = "fake-model",
             DatabasePath = _data.Combine("index.db"),
+            Watch = watch,
         };
 
         Store = new ChunkStore(Options.DatabasePath);
@@ -125,7 +126,11 @@ internal sealed class TestServer : IDisposable
             new PathGuard(allowedPaths ?? []),
             Options,
             NullLogger<DocumentIndexer>.Instance);
-        Tools = new DocsTools(Indexer, Store, Embeddings, Options);
+        Watcher = new FolderWatcher(Indexer, Store, Options, NullLogger<FolderWatcher>.Instance)
+        {
+            Delay = TimeSpan.FromMilliseconds(200),
+        };
+        Tools = new DocsTools(Indexer, Watcher, Store, Embeddings, Options);
     }
 
     public TempFolder Docs { get; } = new();
@@ -138,10 +143,13 @@ internal sealed class TestServer : IDisposable
 
     public DocumentIndexer Indexer { get; }
 
+    public FolderWatcher Watcher { get; }
+
     public DocsTools Tools { get; }
 
     public void Dispose()
     {
+        Watcher.Dispose();
         Docs.Dispose();
         _data.Dispose();
     }

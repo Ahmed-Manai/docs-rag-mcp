@@ -27,6 +27,19 @@ public class DocsRagOptionsTests
         Assert.Equal(expected, options.SearchMode);
     }
 
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("false", false)]
+    [InlineData("OFF", false)]
+    [InlineData("0", false)]
+    [InlineData("yes", true)]
+    public void Watching_is_on_unless_turned_off(string? value, bool expected)
+    {
+        var options = value is null ? Parse() : Parse(("WATCH", value));
+
+        Assert.Equal(expected, options.Watch);
+    }
+
     [Fact]
     public void Azure_needs_an_endpoint_and_a_deployment_name()
     {
@@ -53,6 +66,7 @@ public class DocsRagOptionsTests
     [InlineData("CHUNK_SIZE", "large")]
     [InlineData("PROVIDER", "gemini")]
     [InlineData("SEARCH_MODE", "keyword")]
+    [InlineData("WATCH", "sometimes")]
     [InlineData("ENDPOINT", "not a url")]
     public void Invalid_settings_are_rejected_with_a_clear_message(string key, string value)
     {
