@@ -43,7 +43,7 @@ You can also open the repository in GitHub Codespaces and work entirely in the b
 | Path | What's there |
 |------|--------------|
 | `src/DocsRagMcp/Tools/` | The MCP tools (`index_folder`, `search_docs`, `list_sources`, `remove_from_index`) |
-| `src/DocsRagMcp/Ingestion/` | Reading Markdown, text and PDF files, and chunking |
+| `src/DocsRagMcp/Ingestion/` | Reading Markdown, text, HTML and PDF files, and chunking |
 | `src/DocsRagMcp/Indexing/` | Folder sync and the allowed-folder checks |
 | `src/DocsRagMcp/Storage/` | SQLite storage and vector search |
 | `src/DocsRagMcp/Embeddings/` | Ollama, OpenAI and Azure OpenAI clients |

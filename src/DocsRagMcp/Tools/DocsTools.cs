@@ -22,7 +22,7 @@ public sealed class DocsTools(
 
     [McpServerTool(Name = "index_folder", Idempotent = true)]
     [Description(
-        "Indexes the documents in a folder and its subfolders (Markdown, text and PDF files) so they can be searched with search_docs. " +
+        "Indexes the documents in a folder and its subfolders (Markdown, text, HTML and PDF files) so they can be searched with search_docs. " +
         "Files that haven't changed since the last run are skipped, and files that were deleted are removed from the index. " +
         "Unless watching is turned off, the folder is then watched and changes to its files are indexed automatically.")]
     public Task<string> IndexFolderAsync(

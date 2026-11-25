@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 - 2026-11-25
+
+- HTML support: `.html` and `.htm` files are indexed (#2). Pages are split at their `h1` to `h3` headings, and the page title names the text before the first heading. When the page marks its content with `<main>`, only that is read. Scripts, styles, navigation, hidden elements and the page's own header and footer are left out; a header inside an `article` or `main` element is kept, since it usually holds the title. Code blocks keep their indentation. The page's `<meta charset>` is respected
+- New dependency: [AngleSharp](https://github.com/AngleSharp/AngleSharp) (MIT) to parse HTML
+
 ## 0.4.0 - 2026-11-25
 
 - YAML front matter at the start of a Markdown file is no longer indexed, and its `title` is used as the section name of the text before the first heading. A `---` horizontal rule later in the file is kept. Files indexed before are cleaned up the next time they change (#3)

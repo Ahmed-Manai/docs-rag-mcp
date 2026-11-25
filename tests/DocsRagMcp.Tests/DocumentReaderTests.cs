@@ -109,6 +109,115 @@ public class DocumentReaderTests
     }
 
     [Fact]
+    public void Html_is_split_at_headings_without_scripts_styles_and_navigation()
+    {
+        var parts = DocumentReader.SplitHtml("""
+            <!doctype html>
+            <html>
+            <head>
+              <title>Travel policy</title>
+              <style>.menu { color: red; }</style>
+              <script>var tracking = "secret";</script>
+            </head>
+            <body>
+              <header><a href="/">Company intranet</a></header>
+              <nav><a href="/">Home</a> | <a href="/hr">HR</a></nav>
+              <p>Book   trips
+                 early.</p>
+              <h2>Hotels</h2>
+              <p>Use the <b>travel</b> portal&nbsp;only.</p>
+              <ul><li>Up to 220 EUR in Paris</li><li>Up to 150 EUR elsewhere</li></ul>
+              <h4>Exceptions</h4>
+              <p>Ask your manager.</p>
+              <footer>© 2026 Company</footer>
+            </body>
+            </html>
+            """);
+
+        Assert.Collection(
+            parts,
+            part =>
+            {
+                Assert.Equal("Travel policy", part.Location);
+                Assert.Equal("Book trips early.", part.Text);
+            },
+            part =>
+            {
+                Assert.Equal("Hotels", part.Location);
+                Assert.Equal(
+                    "Hotels\n\nUse the travel portal only.\n\n- Up to 220 EUR in Paris\n- Up to 150 EUR elsewhere\n\nExceptions\n\nAsk your manager.",
+                    part.Text);
+            });
+
+        var all = string.Join("\n", parts.Select(p => p.Text));
+        Assert.DoesNotContain("tracking", all);
+        Assert.DoesNotContain("color", all);
+        Assert.DoesNotContain("intranet", all);
+        Assert.DoesNotContain("Home", all);
+        Assert.DoesNotContain("2026", all);
+    }
+
+    [Fact]
+    public void Html_article_header_is_kept_because_it_holds_the_title()
+    {
+        var part = Assert.Single(DocumentReader.SplitHtml(
+            "<body><header>Site name</header><main><article><header><h1>Release notes</h1></header><p>Faster search.</p></article></main></body>"));
+
+        Assert.Equal("Release notes", part.Location);
+        Assert.Equal("Release notes\n\nFaster search.", part.Text);
+    }
+
+    [Fact]
+    public void Html_code_blocks_keep_their_line_breaks()
+    {
+        var part = Assert.Single(DocumentReader.SplitHtml(
+            "<h1>Install</h1><pre><code>dotnet tool install\n  --global DocsRagMcp</code></pre><p>Then restart.</p>"));
+
+        Assert.Equal("Install\n\ndotnet tool install\n  --global DocsRagMcp\n\nThen restart.", part.Text);
+    }
+
+    [Fact]
+    public void Html_main_element_is_read_without_the_rest_of_the_page()
+    {
+        var part = Assert.Single(DocumentReader.SplitHtml("""
+            <body>
+              <a href="#main">Skip to main content</a>
+              <div class="sidebar"><a href="/a">Getting started</a><a href="/b">Reference</a></div>
+              <main id="main">
+                <h1>Tools</h1>
+                <div role="search">Search the docs</div>
+                <p aria-hidden="true">Decorative text</p>
+                <p>Servers expose tools.</p>
+              </main>
+              <div role="contentinfo">Privacy</div>
+            </body>
+            """));
+
+        Assert.Equal("Tools", part.Location);
+        Assert.Equal("Tools\n\nServers expose tools.", part.Text);
+    }
+
+    [Fact]
+    public void Html_without_text_has_no_parts()
+    {
+        Assert.Empty(DocumentReader.SplitHtml("<html><head><title>Empty</title></head><body><script>run()</script></body></html>"));
+    }
+
+    [Theory]
+    [InlineData("guide.html")]
+    [InlineData("guide.HTM")]
+    public void Html_files_are_read(string fileName)
+    {
+        using var folder = new TempFolder();
+        var path = folder.Write(fileName, "<html><head><meta charset=\"utf-8\"><title>Guide</title></head><body><p>Café menu</p></body></html>");
+
+        Assert.True(DocumentReader.IsSupported(path));
+        var part = Assert.Single(DocumentReader.Read(path));
+        Assert.Equal("Guide", part.Location);
+        Assert.Equal("Café menu", part.Text);
+    }
+
+    [Fact]
     public void Pdf_is_read_page_by_page()
     {
         using var folder = new TempFolder();
