@@ -39,16 +39,18 @@ public static class DocumentReader
 
     /// <summary>
     /// Splits Markdown at its headings, so each part knows which section it belongs to.
-    /// Lines that look like headings inside code blocks are left alone.
+    /// Lines that look like headings inside code blocks are left alone. YAML front matter is left
+    /// out; its title, if it has one, names the text before the first heading.
     /// </summary>
     public static IReadOnlyList<DocumentPart> SplitMarkdown(string markdown)
     {
         var parts = new List<DocumentPart>();
         var current = new StringBuilder();
-        string? heading = null;
+        var lines = markdown.ReplaceLineEndings("\n").Split('\n');
+        var start = FindFrontMatterEnd(lines, out var heading);
         var inCodeBlock = false;
 
-        foreach (var line in markdown.ReplaceLineEndings("\n").Split('\n'))
+        foreach (var line in lines.AsSpan(start))
         {
             var trimmed = line.TrimStart();
 
@@ -80,6 +82,49 @@ public static class DocumentReader
                 parts.Add(new DocumentPart(text, heading));
             }
         }
+    }
+
+    /// <summary>
+    /// Finds YAML front matter: a block that starts with a "---" line on the very first line of the
+    /// file and ends with a "---" (or "...") line. Returns the number of lines it takes, 0 when
+    /// there is none, and its title. A "---" line anywhere else is a horizontal rule and stays.
+    /// </summary>
+    private static int FindFrontMatterEnd(string[] lines, out string? title)
+    {
+        title = null;
+        if (lines.Length == 0 || lines[0].TrimEnd() != "---")
+        {
+            return 0;
+        }
+
+        for (var end = 1; end < lines.Length; end++)
+        {
+            if (lines[end].TrimEnd() is not ("---" or "..."))
+            {
+                continue;
+            }
+
+            foreach (var line in lines.AsSpan(1, end - 1))
+            {
+                if (line.StartsWith("title:", StringComparison.Ordinal))
+                {
+                    var value = line["title:".Length..].Trim();
+                    if (value.Length >= 2 && value[0] is '"' or '\'' && value[^1] == value[0])
+                    {
+                        value = value[1..^1].Trim();
+                    }
+
+                    // A block scalar ("title: |") spans several lines: not worth parsing YAML for.
+                    title = value.Length > 0 && value[0] is not ('|' or '>') ? value : null;
+                    break;
+                }
+            }
+
+            return end + 1;
+        }
+
+        // No closing line: this is not front matter.
+        return 0;
     }
 
     private static bool TryParseHeading(string line, out string title)

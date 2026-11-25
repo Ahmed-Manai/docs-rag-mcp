@@ -72,17 +72,19 @@ public sealed class DocsTools(
         });
 
     [McpServerTool(Name = "list_sources", ReadOnly = true)]
-    [Description("Lists the files in the index, with their number of chunks and when they were last indexed.")]
+    [Description("Shows where the index is and which embedding model built it, then lists the files in the index, with their number of chunks and when they were last indexed, and the watched folders.")]
     public Task<string> ListSourcesAsync(CancellationToken cancellationToken = default) =>
         RunAsync(async () =>
         {
+            var text = new StringBuilder(await DescribeIndexAsync(cancellationToken)).Append("\n\n");
+
             var sources = await store.ListSourcesAsync(cancellationToken);
             if (sources.Count == 0)
             {
-                return "The index is empty. Index a folder with the index_folder tool.";
+                return text.Append("The index is empty. Index a folder with the index_folder tool.").ToString();
             }
 
-            var text = new StringBuilder($"{sources.Count} indexed files ({sources.Sum(s => s.ChunkCount)} chunks):\n");
+            text.Append(CultureInfo.InvariantCulture, $"{sources.Count} indexed files ({sources.Sum(s => s.ChunkCount)} chunks):\n");
             foreach (var source in sources)
             {
                 text.Append(CultureInfo.InvariantCulture, $"- {source.Path} ({source.ChunkCount} chunks, indexed {source.IndexedAt:yyyy-MM-dd HH:mm} UTC)\n");
@@ -100,6 +102,27 @@ public sealed class DocsTools(
 
             return text.ToString().TrimEnd();
         });
+
+    /// <summary>Where the index is, how big it is and which embedding model built it, to help when results look wrong.</summary>
+    private async Task<string> DescribeIndexAsync(CancellationToken cancellationToken)
+    {
+        var file = new FileInfo(options.DatabasePath);
+        var size = file.Exists ? $" ({FormatSize(file.Length)})" : string.Empty;
+
+        var model = await store.GetEmbeddingModelAsync(cancellationToken);
+        var builtWith = model is null
+            ? $"will be built with {options.EmbeddingModelId}"
+            : $"built with {model}";
+
+        return $"Index: {options.DatabasePath}{size}, {builtWith}";
+    }
+
+    public static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => string.Create(CultureInfo.InvariantCulture, $"{bytes} bytes"),
+        < 1024 * 1024 => string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024.0:0.#} KB"),
+        _ => string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024.0 * 1024):0.#} MB"),
+    };
 
     [McpServerTool(Name = "remove_from_index", Destructive = true, Idempotent = true)]
     [Description(

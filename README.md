@@ -23,6 +23,7 @@ Point it at a folder of Markdown, text or PDF files. It splits them into passage
 - **Incremental**: re-indexing only embeds files that changed, and drops files you deleted
 - **Stays in sync**: indexed folders are watched, so new, edited and deleted files are picked up on their own, even changes made while the server was stopped
 - **Cites its sources**: every passage comes with its file path and heading or PDF page
+- **Ignores front matter**: YAML front matter from Jekyll, Hugo, Docusaurus or Obsidian is left out of the index, and its `title` names the text before the first heading
 - **Hybrid search**: ranks by meaning and by keywords, so exact terms such as API names and error codes are found too
 - **Safe by default for shared machines**: you can limit which folders it may read
 
@@ -147,7 +148,7 @@ Now ask your assistant: *"Index my notes in /path/to/your/notes"*, then ask ques
 |------|--------------|
 | `index_folder` | Indexes the Markdown, text and PDF files in a folder and its subfolders. Unchanged files are skipped and deleted files are removed. The folder is then watched and kept in sync. |
 | `search_docs` | Returns the passages closest in meaning to a question, with file, section and score. Optional `topK` (1-20) and `folder` filter. |
-| `list_sources` | Lists the indexed files with their number of chunks and when they were indexed, and the watched folders. |
+| `list_sources` | Shows where the index is, its size and the embedding model that built it, then lists the indexed files with their number of chunks and when they were indexed, and the watched folders. |
 | `remove_from_index` | Removes a file, or every file in a folder, from the index, and stops watching the folder. Files on disk are never touched. |
 
 `search_docs` and `list_sources` are marked read-only and `remove_from_index` destructive, so clients can decide when to ask you for confirmation.

@@ -52,6 +52,32 @@ public sealed class DocsToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task List_sources_starts_with_the_index_file_and_its_embedding_model()
+    {
+        var empty = await _server.Tools.ListSourcesAsync();
+        Assert.StartsWith($"Index: {_server.Options.DatabasePath} (", empty);
+        Assert.Contains($"will be built with {_server.Options.EmbeddingModelId}", empty);
+        Assert.Contains("The index is empty", empty);
+
+        _server.Docs.Write("guide.md", "# Setup\nInstall the app.");
+        await _server.Tools.IndexFolderAsync(_server.Docs.Path);
+
+        var listed = await _server.Tools.ListSourcesAsync();
+        Assert.StartsWith($"Index: {_server.Options.DatabasePath} (", listed.Split('\n')[0]);
+        Assert.EndsWith($"KB), built with {_server.Options.EmbeddingModelId}", listed.Split('\n')[0]);
+        Assert.Contains("1 indexed files", listed);
+    }
+
+    [Theory]
+    [InlineData(0, "0 bytes")]
+    [InlineData(1023, "1023 bytes")]
+    [InlineData(1024, "1 KB")]
+    [InlineData(1536, "1.5 KB")]
+    [InlineData(13_002_342, "12.4 MB")]
+    public void Index_size_is_readable(long bytes, string expected) =>
+        Assert.Equal(expected, DocsRagMcp.Tools.DocsTools.FormatSize(bytes));
+
+    [Fact]
     public async Task Sources_can_be_listed_and_removed()
     {
         var guide = _server.Docs.Write("guide.md", "# Setup\nInstall the app.");

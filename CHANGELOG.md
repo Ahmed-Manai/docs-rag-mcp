@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 - 2026-11-25
+
+- YAML front matter at the start of a Markdown file is no longer indexed, and its `title` is used as the section name of the text before the first heading. A `---` horizontal rule later in the file is kept. Files indexed before are cleaned up the next time they change (#3)
+- `list_sources` starts with the index file, its size and the embedding model it was built with, for example `Index: /home/me/.docs-rag-mcp/index.db (12.4 MB), built with ollama/nomic-embed-text` (#4)
+
 ## 0.3.0 - 2026-11-24
 
 - Watch mode: folders indexed with `index_folder` are remembered and watched. New, changed and deleted files are indexed automatically a couple of seconds after the folder goes quiet, and changes made while the server was stopped are picked up when it starts. Only files whose content changed are embedded again.
