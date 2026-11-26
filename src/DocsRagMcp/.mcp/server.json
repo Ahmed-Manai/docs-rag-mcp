@@ -3,7 +3,7 @@
   "name": "io.github.Ahmed-Manai/docs-rag-mcp",
   "title": "Docs RAG",
   "description": "Search your own documents (Markdown, text, PDF) with RAG from Claude, Copilot or Cursor.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "repository": {
     "url": "https://github.com/Ahmed-Manai/docs-rag-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "nuget",
       "identifier": "DocsRagMcp",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "transport": {
         "type": "stdio"
       },

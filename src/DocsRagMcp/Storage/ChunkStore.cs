@@ -289,7 +289,8 @@ public sealed class ChunkStore
     }
 
     /// <summary>
-    /// Returns the <paramref name="topK"/> most relevant chunks, best first. Without
+    /// Returns the <paramref name="topK"/> most relevant chunks, best first, optionally only from the
+    /// files that are, or are inside, one of the paths in <paramref name="within"/>. Without
     /// <paramref name="keywords"/>, chunks are ranked by cosine similarity to the query vector.
     /// With them, each candidate also gets a keyword score (BM25 over the full-text index), both
     /// scores are scaled to 0..1 and blended, so a passage that uses the exact terms of the question
@@ -299,7 +300,7 @@ public sealed class ChunkStore
     public async Task<IReadOnlyList<SearchHit>> SearchAsync(
         ReadOnlyMemory<float> query,
         int topK,
-        string? withinFolder = null,
+        IReadOnlyCollection<string>? within = null,
         string? keywords = null,
         CancellationToken cancellationToken = default)
     {
@@ -307,7 +308,7 @@ public sealed class ChunkStore
 
         await using var connection = await OpenAsync(cancellationToken);
 
-        var similarities = await ScoreAllAsync(connection, query, withinFolder, cancellationToken);
+        var similarities = await ScoreAllAsync(connection, query, within, cancellationToken);
         if (similarities.Count == 0)
         {
             return [];
@@ -358,9 +359,13 @@ public sealed class ChunkStore
             .Select(candidate => candidate.Id);
     }
 
-    /// <summary>Computes the cosine similarity of every chunk (inside the folder, if given) to the query.</summary>
+    /// <summary>
+    /// Computes the cosine similarity of every chunk to the query. When <paramref name="within"/> is
+    /// given, only chunks of files that are, or are inside, one of those paths take part, so the
+    /// filter applies before ranking.
+    /// </summary>
     private static async Task<Dictionary<long, float>> ScoreAllAsync(
-        SqliteConnection connection, ReadOnlyMemory<float> query, string? withinFolder, CancellationToken cancellationToken)
+        SqliteConnection connection, ReadOnlyMemory<float> query, IReadOnlyCollection<string>? within, CancellationToken cancellationToken)
     {
         var similarities = new Dictionary<long, float>();
 
@@ -370,7 +375,7 @@ public sealed class ChunkStore
 
         while (await reader.ReadAsync(cancellationToken))
         {
-            if (withinFolder is not null && !PathUtils.IsSameOrUnder(reader.GetString(1), withinFolder))
+            if (within is not null && !within.Any(scope => PathUtils.IsSameOrUnder(reader.GetString(1), scope)))
             {
                 continue;
             }

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using DocsRagMcp.Indexing;
+using DocsRagMcp.Resources;
 using DocsRagMcp.Storage;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol;
@@ -46,7 +47,10 @@ public sealed class DocsTools(
     public Task<string> SearchDocsAsync(
         [Description("What to look for, as a question or a short phrase.")] string query,
         [Description("How many passages to return, from 1 to 20.")] int topK = 5,
-        [Description("Optional. Only search files inside this folder.")] string? folder = null,
+        [Description(
+            "Optional. Only search this part of the index: an absolute path of a folder or file, a file:// resource URI, " +
+            "or a path relative to an indexed folder, such as \"api/v2\".")]
+        string? folder = null,
         CancellationToken cancellationToken = default) =>
         RunAsync(async () =>
         {
@@ -57,19 +61,55 @@ public sealed class DocsTools(
 
             await store.CheckEmbeddingModelAsync(options.EmbeddingModelId, claimIfUnset: false, cancellationToken);
 
-            if ((await store.ListSourcePathsAsync(cancellationToken)).Count == 0)
+            var sources = await store.ListSourcePathsAsync(cancellationToken);
+            if (sources.Count == 0)
             {
                 return "The index is empty. Index a folder first with the index_folder tool.";
             }
 
+            IReadOnlyList<string>? within = null;
+            if (!string.IsNullOrWhiteSpace(folder))
+            {
+                within = await ResolveSearchScopeAsync(folder, cancellationToken);
+                if (!sources.Any(source => within.Any(scope => PathUtils.IsSameOrUnder(source, scope))))
+                {
+                    return $"No indexed files are inside {folder}. Use list_sources to see the indexed files.";
+                }
+            }
+
             var vector = await embeddingGenerator.GenerateVectorAsync(query, cancellationToken: cancellationToken);
-            var within = string.IsNullOrWhiteSpace(folder) ? null : PathUtils.Normalize(folder);
             var keywords = options.SearchMode == SearchMode.Hybrid ? query : null;
             var hits = await store.SearchAsync(
                 vector, Math.Clamp(topK, 1, MaxResults), within, keywords, cancellationToken);
 
             return hits.Count == 0 ? "No matching passages found." : FormatHits(query, hits);
         });
+
+    /// <summary>
+    /// Turns the folder filter of search_docs into full paths. A relative path is looked up in every
+    /// indexed folder, so "api" matches the "api" subfolder of each of them.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> ResolveSearchScopeAsync(string folder, CancellationToken cancellationToken)
+    {
+        folder = folder.Trim();
+
+        if (DocsResources.TryGetPath(folder, out var fromUri))
+        {
+            return [fromUri];
+        }
+
+        if (folder.StartsWith('~') || Path.IsPathRooted(Environment.ExpandEnvironmentVariables(folder)))
+        {
+            return [PathUtils.Normalize(folder)];
+        }
+
+        return (await store.ListFoldersAsync(cancellationToken))
+            .Select(root => (Root: root, Scope: PathUtils.Normalize(Path.Combine(root, folder))))
+            .Where(pair => PathUtils.IsSameOrUnder(pair.Scope, pair.Root))
+            .Select(pair => pair.Scope)
+            .Distinct(PathUtils.Comparer)
+            .ToList();
+    }
 
     [McpServerTool(Name = "list_sources", ReadOnly = true)]
     [Description("Shows where the index is and which embedding model built it, then lists the files in the index, with their number of chunks and when they were last indexed, and the watched folders.")]

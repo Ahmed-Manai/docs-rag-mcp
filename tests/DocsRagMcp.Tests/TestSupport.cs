@@ -1,11 +1,13 @@
 using System.Text.RegularExpressions;
 using DocsRagMcp.Indexing;
 using DocsRagMcp.Ingestion;
+using DocsRagMcp.Resources;
 using DocsRagMcp.Storage;
 using DocsRagMcp.Tools;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol.Server;
 
 namespace DocsRagMcp.Tests;
 
@@ -119,11 +121,12 @@ internal sealed class TestServer : IDisposable
         };
 
         Store = new ChunkStore(Options.DatabasePath);
+        var pathGuard = new PathGuard(allowedPaths ?? []);
         Indexer = new DocumentIndexer(
             Store,
             Embeddings,
             new TextChunker(400, 80),
-            new PathGuard(allowedPaths ?? []),
+            pathGuard,
             Options,
             NullLogger<DocumentIndexer>.Instance);
         Watcher = new FolderWatcher(Indexer, Store, Options, NullLogger<FolderWatcher>.Instance)
@@ -131,6 +134,7 @@ internal sealed class TestServer : IDisposable
             Delay = TimeSpan.FromMilliseconds(200),
         };
         Tools = new DocsTools(Indexer, Watcher, Store, Embeddings, Options);
+        Resources = new DocsResources(Store, pathGuard, Indexer, new McpServerResourceCollection(), NullLogger<DocsResources>.Instance);
     }
 
     public TempFolder Docs { get; } = new();
@@ -146,6 +150,8 @@ internal sealed class TestServer : IDisposable
     public FolderWatcher Watcher { get; }
 
     public DocsTools Tools { get; }
+
+    public DocsResources Resources { get; }
 
     public void Dispose()
     {

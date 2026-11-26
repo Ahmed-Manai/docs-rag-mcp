@@ -1,3 +1,4 @@
+using DocsRagMcp.Resources;
 using ModelContextProtocol;
 
 namespace DocsRagMcp.Tests;
@@ -21,6 +22,45 @@ public sealed class DocsToolsTests : IDisposable
 
         Assert.Contains($"{_server.Docs.Combine("billing.md")} > Refunds", result);
         Assert.Contains("five business days", result);
+    }
+
+    [Theory]
+    [InlineData("absolute")]
+    [InlineData("relative")]
+    [InlineData("uri")]
+    [InlineData("file")]
+    public async Task Search_can_be_limited_to_part_of_the_index(string form)
+    {
+        _server.Docs.Write("api/v1/auth.md", "# Tokens\nTokens expire after one hour.");
+        var v2 = _server.Docs.Write("api/v2/auth.md", "# Tokens\nTokens expire after one day.");
+        _server.Docs.Write("guides/auth.md", "# Tokens\nTokens expire when you sign out.");
+        await _server.Tools.IndexFolderAsync(_server.Docs.Path);
+
+        var folder = form switch
+        {
+            "absolute" => _server.Docs.Combine("api", "v2"),
+            "relative" => "api/v2",
+            "uri" => DocsResources.ToUri(_server.Docs.Combine("api", "v2")),
+            _ => v2,
+        };
+
+        var result = await _server.Tools.SearchDocsAsync("when do tokens expire", topK: 5, folder: folder);
+
+        Assert.StartsWith("1 passages", result);
+        Assert.Contains($"{v2} > Tokens", result);
+    }
+
+    [Fact]
+    public async Task Search_in_a_folder_with_no_indexed_files_says_so()
+    {
+        _server.Docs.Write("guide.md", "# Setup\nInstall the app.");
+        await _server.Tools.IndexFolderAsync(_server.Docs.Path);
+        var calls = _server.Embeddings.Calls;
+
+        var result = await _server.Tools.SearchDocsAsync("install", folder: "no-such-folder");
+
+        Assert.Equal("No indexed files are inside no-such-folder. Use list_sources to see the indexed files.", result);
+        Assert.Equal(calls, _server.Embeddings.Calls);
     }
 
     [Fact]

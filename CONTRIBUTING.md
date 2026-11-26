@@ -19,7 +19,7 @@ dotnet build
 dotnet test
 ```
 
-The tests use a deterministic fake embedding model, so they need no network and no API key. Two of them start the real server process and talk to it over MCP.
+The tests use a deterministic fake embedding model, so they need no network and no API key. A few of them start the real server process and talk to it over MCP.
 
 To check a change against a real model, install [Ollama](https://ollama.com), run `ollama pull nomic-embed-text`, and then:
 
@@ -43,6 +43,7 @@ You can also open the repository in GitHub Codespaces and work entirely in the b
 | Path | What's there |
 |------|--------------|
 | `src/DocsRagMcp/Tools/` | The MCP tools (`index_folder`, `search_docs`, `list_sources`, `remove_from_index`) |
+| `src/DocsRagMcp/Resources/` | The indexed files as MCP resources |
 | `src/DocsRagMcp/Ingestion/` | Reading Markdown, text, HTML, Word and PDF files, and chunking |
 | `src/DocsRagMcp/Indexing/` | Folder sync and the allowed-folder checks |
 | `src/DocsRagMcp/Storage/` | SQLite storage and vector search |
