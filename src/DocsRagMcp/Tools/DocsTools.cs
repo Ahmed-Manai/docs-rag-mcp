@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using DocsRagMcp.Indexing;
+using DocsRagMcp.Reranking;
 using DocsRagMcp.Resources;
 using DocsRagMcp.Storage;
 using Microsoft.Extensions.AI;
@@ -17,6 +18,7 @@ public sealed class DocsTools(
     FolderWatcher watcher,
     ChunkStore store,
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    Reranker reranker,
     DocsRagOptions options)
 {
     private const int MaxResults = 20;
@@ -77,10 +79,15 @@ public sealed class DocsTools(
                 }
             }
 
+            topK = Math.Clamp(topK, 1, MaxResults);
             var vector = await embeddingGenerator.GenerateVectorAsync(query, cancellationToken: cancellationToken);
             var keywords = options.SearchMode == SearchMode.Hybrid ? query : null;
             var hits = await store.SearchAsync(
-                vector, Math.Clamp(topK, 1, MaxResults), within, keywords, cancellationToken);
+                vector, topK, within, keywords, limit: reranker.CandidatesFor(topK), cancellationToken);
+
+            // With a reranker, the best candidates are reordered by a cross-encoder model. Without
+            // one, or when it fails, the search order is kept.
+            hits = await reranker.RerankAsync(query, hits, topK, cancellationToken);
 
             return hits.Count == 0 ? "No matching passages found." : FormatHits(query, hits);
         });

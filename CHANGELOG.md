@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0 - 2026-11-26
+
+- Optional reranking: `search_docs` can reorder its best passages with a cross-encoder model. Set `DOCSRAG_RERANK_ENDPOINT` (`--rerank-endpoint`) to any endpoint that speaks the Cohere-style `/rerank` API, such as llama.cpp's `llama-server --reranking` with `bge-reranker-v2-m3` for a fully local setup, or Cohere, Jina, vLLM or Infinity. `DOCSRAG_RERANK_MODEL` (`--rerank-model`) picks the model and `DOCSRAG_RERANK_API_KEY` is sent as a bearer token
+- `DOCSRAG_RERANK_CANDIDATES` (`--rerank-candidates`): how many of the best passages are reranked, 20 by default (at least `topK`)
+- Reranking is off unless the endpoint is set. When the reranker fails or takes longer than 30 seconds, a warning is logged and the usual order is kept. The score shown is still the cosine similarity
+- `samples/eval/eval.cs` also measures hybrid search with reranking when `DOCSRAG_RERANK_ENDPOINT` is set
+- No new dependency
+
 ## 0.7.0 - 2026-11-26
 
 - Indexed files are MCP resources. `resources/list` lists every indexed file with its `file://` URI, and `resources/read` returns Markdown and text files as they are on disk, and HTML, Word and PDF files as their extracted text (`text/markdown` or `text/plain`). Only files in the index that are still inside `DOCSRAG_ALLOWED_PATHS` can be read, and symbolic links are not followed. Clients are sent `notifications/resources/list_changed` when files are indexed, changed or removed

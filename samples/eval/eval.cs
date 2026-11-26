@@ -12,6 +12,7 @@
 //   dotnet run samples/eval/eval.cs -- samples/eval/mcp-csharp-sdk-docs.json /tmp/csharp-sdk
 //
 // Uses Ollama by default; set the DOCSRAG_* variables to evaluate another embedding provider.
+// When DOCSRAG_RERANK_ENDPOINT is set, hybrid search is also measured with reranking.
 
 using System.Globalization;
 using System.Text.Json;
@@ -46,17 +47,25 @@ try
     Console.WriteLine("| Search mode | Right page first (hit@1) | Right page in top 3 (hit@3) | MRR |");
     Console.WriteLine("|---|---|---|---|");
 
+    var runs = new List<(string Name, string SearchMode, bool Rerank)> { ("vector", "vector", false), ("hybrid", "hybrid", false) };
+    if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DOCSRAG_RERANK_ENDPOINT")))
+    {
+        runs.Add(("hybrid + rerank", "hybrid", true));
+    }
+
     var details = new List<string>();
-    foreach (var mode in new[] { "vector", "hybrid" })
+    foreach (var (mode, searchMode, rerank) in runs)
     {
         await using var client = await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
         {
             Name = "docs-rag-mcp",
             Command = "dotnet",
-            Arguments = ["run", "--no-build", "--project", project, "--", "--database", database, "--search-mode", mode],
+            Arguments = ["run", "--no-build", "--project", project, "--", "--database", database, "--search-mode", searchMode],
+            // An empty value turns reranking off for the runs without it.
+            EnvironmentVariables = rerank ? null : new Dictionary<string, string?> { ["DOCSRAG_RERANK_ENDPOINT"] = string.Empty },
         }));
 
-        // The first mode builds the index; the second finds every file unchanged and reuses it.
+        // The first run builds the index; the others find every file unchanged and reuse it.
         await CallAsync(client, "index_folder", new() { ["path"] = folder });
 
         int hit1 = 0, hit3 = 0;
@@ -76,7 +85,7 @@ try
             if (rank > 0) reciprocalRanks += 1.0 / rank;
 
             details.Add(string.Create(CultureInfo.InvariantCulture,
-                $"{mode,-6} rank {(rank == 0 ? "-" : rank.ToString(CultureInfo.InvariantCulture)),2}  {text}  (top: {pages.FirstOrDefault().Full})"));
+                $"{mode,-15} rank {(rank == 0 ? "-" : rank.ToString(CultureInfo.InvariantCulture)),2}  {text}  (top: {pages.FirstOrDefault().Full})"));
         }
 
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,

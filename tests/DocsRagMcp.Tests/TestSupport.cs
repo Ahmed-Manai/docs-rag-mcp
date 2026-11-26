@@ -1,11 +1,13 @@
 using System.Text.RegularExpressions;
 using DocsRagMcp.Indexing;
 using DocsRagMcp.Ingestion;
+using DocsRagMcp.Reranking;
 using DocsRagMcp.Resources;
 using DocsRagMcp.Storage;
 using DocsRagMcp.Tools;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 
@@ -110,7 +112,12 @@ internal sealed class TestServer : IDisposable
 {
     private readonly TempFolder _data = new();
 
-    public TestServer(IEnumerable<string>? allowedPaths = null, bool watch = true)
+    public TestServer(
+        IEnumerable<string>? allowedPaths = null,
+        bool watch = true,
+        IRerankClient? rerankClient = null,
+        int rerankCandidates = 20,
+        SearchMode searchMode = SearchMode.Hybrid)
     {
         Options = new DocsRagOptions
         {
@@ -118,6 +125,9 @@ internal sealed class TestServer : IDisposable
             Model = "fake-model",
             DatabasePath = _data.Combine("index.db"),
             Watch = watch,
+            SearchMode = searchMode,
+            RerankEndpoint = rerankClient is null ? null : "http://localhost:8012/v1/rerank",
+            RerankCandidates = rerankCandidates,
         };
 
         Store = new ChunkStore(Options.DatabasePath);
@@ -133,7 +143,11 @@ internal sealed class TestServer : IDisposable
         {
             Delay = TimeSpan.FromMilliseconds(200),
         };
-        Tools = new DocsTools(Indexer, Watcher, Store, Embeddings, Options);
+        Reranker = new Reranker(rerankClient, Options, Logger)
+        {
+            Timeout = TimeSpan.FromMilliseconds(500),
+        };
+        Tools = new DocsTools(Indexer, Watcher, Store, Embeddings, Reranker, Options);
         Resources = new DocsResources(Store, pathGuard, Indexer, new McpServerResourceCollection(), NullLogger<DocsResources>.Instance);
     }
 
@@ -151,6 +165,10 @@ internal sealed class TestServer : IDisposable
 
     public DocsTools Tools { get; }
 
+    public Reranker Reranker { get; }
+
+    public ListLogger<Reranker> Logger { get; } = new();
+
     public DocsResources Resources { get; }
 
     public void Dispose()
@@ -158,5 +176,56 @@ internal sealed class TestServer : IDisposable
         Watcher.Dispose();
         Docs.Dispose();
         _data.Dispose();
+    }
+}
+
+/// <summary>Keeps the messages logged during a test, so a test can check what was reported.</summary>
+internal sealed class ListLogger<T> : ILogger<T>
+{
+    public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        lock (Entries)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
+    }
+}
+
+/// <summary>
+/// Deterministic stand-in for a cross-encoder: <see cref="Score"/> decides each document's score
+/// (by default, how many words of the query it contains), and every call is recorded.
+/// </summary>
+internal sealed class FakeRerankClient : IRerankClient
+{
+    public Func<string, IReadOnlyList<string>, IReadOnlyList<double?>> Score { get; init; } = CountQueryWords;
+
+    public TimeSpan Delay { get; init; }
+
+    public List<(string Query, IReadOnlyList<string> Documents)> Calls { get; } = [];
+
+    public async Task<IReadOnlyList<double?>> ScoreAsync(string query, IReadOnlyList<string> documents, CancellationToken cancellationToken)
+    {
+        Calls.Add((query, documents));
+        if (Delay > TimeSpan.Zero)
+        {
+            await Task.Delay(Delay, cancellationToken);
+        }
+
+        return Score(query, documents);
+    }
+
+    private static double?[] CountQueryWords(string query, IReadOnlyList<string> documents)
+    {
+        var words = query.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return documents
+            .Select(document => (double?)words.Count(word => document.Contains(word, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
     }
 }

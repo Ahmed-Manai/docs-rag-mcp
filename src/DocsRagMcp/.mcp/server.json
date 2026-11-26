@@ -3,7 +3,7 @@
   "name": "io.github.Ahmed-Manai/docs-rag-mcp",
   "title": "Docs RAG",
   "description": "Search your own documents (Markdown, text, PDF) with RAG from Claude, Copilot or Cursor.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "repository": {
     "url": "https://github.com/Ahmed-Manai/docs-rag-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "nuget",
       "identifier": "DocsRagMcp",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "transport": {
         "type": "stdio"
       },
@@ -55,6 +55,24 @@
           "description": "true (default) watches indexed folders and indexes changes automatically; false indexes only when index_folder is called.",
           "default": "true",
           "choices": ["true", "false"]
+        },
+        {
+          "name": "DOCSRAG_RERANK_ENDPOINT",
+          "description": "Optional. URL of a Cohere-style /rerank endpoint (llama.cpp, Cohere, Jina, vLLM...), such as http://localhost:8012/v1/rerank. Turns on reranking of the best results with a cross-encoder model."
+        },
+        {
+          "name": "DOCSRAG_RERANK_MODEL",
+          "description": "Reranking model, for rerank services that serve several, such as rerank-v3.5 for Cohere."
+        },
+        {
+          "name": "DOCSRAG_RERANK_API_KEY",
+          "description": "API key for the rerank service, sent as a bearer token.",
+          "isSecret": true
+        },
+        {
+          "name": "DOCSRAG_RERANK_CANDIDATES",
+          "description": "How many of the best results are sent to the reranker, from 1 to 100. Defaults to 20.",
+          "default": "20"
         }
       ]
     }
