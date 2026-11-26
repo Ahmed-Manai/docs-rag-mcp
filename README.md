@@ -236,6 +236,8 @@ Without `DOCSRAG_API_KEY`, the server signs in with Microsoft Entra ID through `
 
 ## Design notes
 
+The article [I built a local RAG server for Claude and Copilot in C#. Here is what I learned about search.](https://dev.to/ahmed_manai/i-built-a-local-rag-server-for-claude-and-copilot-in-c-here-is-what-i-learned-about-search-2h3) walks through these choices and what they changed in the search results.
+
 - **Chunking follows the document's structure.** Markdown, HTML and Word documents are split at headings and PDFs by page before being cut into chunks, so every passage knows where it came from. Chunks break at paragraph boundaries when they can, and overlap a little so an idea that spans two chunks can still be found.
 - **Each chunk is embedded with its context.** The text sent to the embedding model starts with the file name and heading (for example `travel-and-expenses.md > Hotels`). A short passage like "220 EUR in Paris" then still matches a question about hotel budgets.
 - **Brute-force cosine search over SQLite.** Vectors are stored as blobs and compared with `TensorPrimitives.CosineSimilarity`, which uses SIMD. For personal and team document sets (up to tens of thousands of chunks) this stays fast and needs no native vector extension. A vector index is on the roadmap for larger sets.
