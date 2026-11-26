@@ -68,7 +68,15 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and [Ollama](h
 ollama pull nomic-embed-text
 ```
 
-The server is published on [NuGet](https://www.nuget.org/packages/DocsRagMcp) and in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.Ahmed-Manai/docs-rag-mcp`. `dnx`, which comes with .NET 10, downloads and starts it, so there is nothing else to install. Add it to your assistant:
+The server is published on [NuGet](https://www.nuget.org/packages/DocsRagMcp) and in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.Ahmed-Manai/docs-rag-mcp`. `dnx`, which comes with .NET 10, downloads and starts it, so there is nothing else to install. Add it to your assistant in one click:
+
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_docs--rag-0098FF?logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=docs-rag&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22docs-folder%22%2C%22description%22%3A%22Folder%20with%20the%20documents%20the%20server%20may%20index%22%7D%5D&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22dnx%22%2C%22args%22%3A%5B%22DocsRagMcp%22%2C%22--yes%22%5D%2C%22env%22%3A%7B%22DOCSRAG_ALLOWED_PATHS%22%3A%22%24%7Binput%3Adocs-folder%7D%22%7D%7D)
+[![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_docs--rag-24bfa5?logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=docs-rag&inputs=%5B%7B%22type%22%3A%22promptString%22%2C%22id%22%3A%22docs-folder%22%2C%22description%22%3A%22Folder%20with%20the%20documents%20the%20server%20may%20index%22%7D%5D&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22dnx%22%2C%22args%22%3A%5B%22DocsRagMcp%22%2C%22--yes%22%5D%2C%22env%22%3A%7B%22DOCSRAG_ALLOWED_PATHS%22%3A%22%24%7Binput%3Adocs-folder%7D%22%7D%7D&quality=insiders)
+[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_docs--rag-000000?logo=cursor&logoColor=white)](https://cursor.com/install-mcp?name=docs-rag&config=eyJjb21tYW5kIjoiZG54IiwiYXJncyI6WyJEb2NzUmFnTWNwIiwiLS15ZXMiXX0%3D)
+
+VS Code asks which folder the server may read. The Cursor button lets it read any folder: to limit it, add `DOCSRAG_ALLOWED_PATHS` to its entry in `~/.cursor/mcp.json`, as shown below.
+
+Or add it by hand:
 
 <details open>
 <summary><b>Claude Desktop</b></summary>
@@ -143,6 +151,21 @@ Then use `"command": "dotnet"` with `"args": ["run", "--no-build", "-c", "Releas
 </details>
 
 Now ask your assistant: *"Index my notes in /path/to/your/notes"*, then ask questions about them.
+
+### Try it on the sample handbook
+
+No documents at hand? The repository comes with a short employee handbook:
+
+```bash
+git clone https://github.com/Ahmed-Manai/docs-rag-mcp.git
+```
+
+Allow `docs-rag-mcp/samples/handbook` in `DOCSRAG_ALLOWED_PATHS`, then ask your assistant:
+
+1. *"Index the folder /path/to/docs-rag-mcp/samples/handbook"*
+2. *"Can I spend a month working from Spain?"*
+
+It answers from the "Working from another country" section of `remote-work.md`, as in the [example](#example) above.
 
 ## Tools
 
@@ -278,7 +301,6 @@ samples/                      sample documents, the smoke test and the search ev
 
 ## Roadmap
 
-- Word (`.docx`) and HTML files
 - Reranking the top results with a cross-encoder model
 - A vector index for very large document sets
 - Exposing indexed files as MCP resources
