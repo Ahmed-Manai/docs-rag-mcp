@@ -29,9 +29,33 @@ public sealed class ChunkStoreTests : IDisposable
         await _store.ReplaceSourceAsync(Doc("team-a/notes.md"), "h1", [Chunk(0, "alpha", 1, 0, 0)]);
         await _store.ReplaceSourceAsync(Doc("team-b/notes.md"), "h2", [Chunk(0, "beta", 1, 0, 0)]);
 
-        var hits = await _store.SearchAsync(new float[] { 1, 0, 0 }, topK: 5, withinFolder: Doc("team-b"));
+        var hits = await _store.SearchAsync(new float[] { 1, 0, 0 }, topK: 5, within: [Doc("team-b")]);
 
         Assert.Equal("beta", Assert.Single(hits).Text);
+    }
+
+    [Fact]
+    public async Task Search_can_be_limited_to_several_folders_and_files()
+    {
+        await _store.ReplaceSourceAsync(Doc("team-a/notes.md"), "h1", [Chunk(0, "alpha", 1, 0, 0)]);
+        await _store.ReplaceSourceAsync(Doc("team-b/notes.md"), "h2", [Chunk(0, "beta", 1, 0, 0)]);
+        await _store.ReplaceSourceAsync(Doc("team-c/notes.md"), "h3", [Chunk(0, "gamma", 1, 0, 0)]);
+        await _store.ReplaceSourceAsync(Doc("team-c/other.md"), "h4", [Chunk(0, "delta", 1, 0, 0)]);
+
+        var hits = await _store.SearchAsync(new float[] { 1, 0, 0 }, topK: 5, within: [Doc("team-a"), Doc("team-c/notes.md")]);
+
+        Assert.Equal(["alpha", "gamma"], hits.Select(hit => hit.Text).Order());
+    }
+
+    [Fact]
+    public async Task Folder_filter_does_not_match_a_sibling_with_the_same_prefix()
+    {
+        await _store.ReplaceSourceAsync(Doc("api/a.md"), "h1", [Chunk(0, "inside", 1, 0, 0)]);
+        await _store.ReplaceSourceAsync(Doc("api-old/a.md"), "h2", [Chunk(0, "sibling", 1, 0, 0)]);
+
+        var hits = await _store.SearchAsync(new float[] { 1, 0, 0 }, topK: 5, within: [Doc("api")]);
+
+        Assert.Equal("inside", Assert.Single(hits).Text);
     }
 
     [Fact]

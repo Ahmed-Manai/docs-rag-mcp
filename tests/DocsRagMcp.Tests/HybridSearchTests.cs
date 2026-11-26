@@ -119,9 +119,32 @@ public sealed class HybridSearchTests : IDisposable
         await _store.ReplaceSourceAsync(Doc("team-a/notes.md"), "h1", [Chunk(0, "redis cache settings", 0, 1, 0)]);
         await _store.ReplaceSourceAsync(Doc("team-b/notes.md"), "h2", [Chunk(0, "postgres settings", 1, 0, 0)]);
 
-        var hits = await _store.SearchAsync(Query, topK: 5, withinFolder: Doc("team-b"), keywords: "redis");
+        var hits = await _store.SearchAsync(Query, topK: 5, within: [Doc("team-b")], keywords: "redis");
 
         Assert.Equal("postgres settings", Assert.Single(hits).Text);
+    }
+
+    [Fact]
+    public async Task Folder_filter_applies_before_ranking_in_both_searches()
+    {
+        // Far more passages outside the folder are better matches, by meaning and by keywords, than
+        // the candidate limit takes. The passages inside the folder must still be found.
+        for (var i = 0; i < 120; i++)
+        {
+            await _store.ReplaceSourceAsync(Doc($"other/{i}.md"), $"o{i}", [Chunk(0, "redis redis cache settings", 1, 0, 0)]);
+        }
+
+        await _store.ReplaceSourceAsync(Doc("team/a.md"), "t1",
+        [
+            Chunk(0, "redis settings for the team", 0.2f, 1, 0),
+            Chunk(1, "nothing about caches", 0.6f, 0.8f, 0),
+        ]);
+
+        var hybrid = await _store.SearchAsync(Query, topK: 2, within: [Doc("team")], keywords: "redis");
+        var vector = await _store.SearchAsync(Query, topK: 2, within: [Doc("team")]);
+
+        Assert.Equal(["nothing about caches", "redis settings for the team"], hybrid.Select(hit => hit.Text));
+        Assert.Equal(["nothing about caches", "redis settings for the team"], vector.Select(hit => hit.Text));
     }
 
     [Theory]

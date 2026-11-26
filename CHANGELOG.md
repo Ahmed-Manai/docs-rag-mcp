@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0 - 2026-11-26
+
+- Indexed files are MCP resources. `resources/list` lists every indexed file with its `file://` URI, and `resources/read` returns Markdown and text files as they are on disk, and HTML, Word and PDF files as their extracted text (`text/markdown` or `text/plain`). Only files in the index that are still inside `DOCSRAG_ALLOWED_PATHS` can be read, and symbolic links are not followed. Clients are sent `notifications/resources/list_changed` when files are indexed, changed or removed
+- The `folder` filter of `search_docs` also takes a single file, a `file://` resource URI or a path relative to the indexed folders (`api/v2`). When no indexed file is inside it, the search says so instead of returning nothing
+
 ## 0.6.0 - 2026-11-25
 
 - Word support: `.docx` files are indexed (#1). Documents are split at their Title and Heading 1 to 3 paragraphs, including custom styles based on a heading and headings set with an outline level, and the document title from its properties names the text before the first heading. Headings are found by the built-in style names, so documents from non-English versions of Word work too. List items become `- ` lines and table rows `cell | cell` lines; deleted text from tracked changes and field codes are left out

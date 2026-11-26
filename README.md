@@ -23,6 +23,7 @@ Point it at a folder of Markdown, text, HTML, Word or PDF files. It splits them 
 - **Incremental**: re-indexing only embeds files that changed, and drops files you deleted
 - **Stays in sync**: indexed folders are watched, so new, edited and deleted files are picked up on their own, even changes made while the server was stopped
 - **Cites its sources**: every passage comes with its file path and heading or PDF page
+- **Indexed files are MCP resources**: clients can list them and attach a whole document to the conversation
 - **Reads HTML too**: saved web pages and generated docs sites are split at their headings, without scripts, styles, menus, headers and footers
 - **Reads Word documents**: `.docx` files are split at their Title and Heading 1 to 3 paragraphs, in any language version of Word, with lists and tables kept readable
 - **Ignores front matter**: YAML front matter from Jekyll, Hugo, Docusaurus or Obsidian is left out of the index, and its `title` names the text before the first heading
@@ -172,11 +173,36 @@ It answers from the "Working from another country" section of `remote-work.md`, 
 | Tool | What it does |
 |------|--------------|
 | `index_folder` | Indexes the Markdown, text, HTML, Word and PDF files in a folder and its subfolders. Unchanged files are skipped and deleted files are removed. The folder is then watched and kept in sync. |
-| `search_docs` | Returns the passages closest in meaning to a question, with file, section and score. Optional `topK` (1-20) and `folder` filter. |
+| `search_docs` | Returns the passages closest in meaning to a question, with file, section and score. Optional `topK` (1-20) and `folder`, which limits the search to part of the index (see below). |
 | `list_sources` | Shows where the index is, its size and the embedding model that built it, then lists the indexed files with their number of chunks and when they were indexed, and the watched folders. |
 | `remove_from_index` | Removes a file, or every file in a folder, from the index, and stops watching the folder. Files on disk are never touched. |
 
 `search_docs` and `list_sources` are marked read-only and `remove_from_index` destructive, so clients can decide when to ask you for confirmation.
+
+### Searching part of the index
+
+`folder` accepts any of these, and only files inside it are scored, both by meaning and by keywords:
+
+- an absolute path of a folder or a single file, such as `/home/me/notes/api`
+- a resource URI, such as `file:///home/me/notes/api/auth.md`
+- a path relative to the indexed folders, such as `api/v2`: it matches that subfolder in every indexed folder that has one
+
+If no indexed file is inside it, `search_docs` says so instead of returning unrelated passages.
+
+## Resources
+
+Every indexed file is also an [MCP resource](https://modelcontextprotocol.io/specification/2025-11-25/server/resources), so clients that support resources (for example Claude Desktop and VS Code) can list the files and attach a whole document to the conversation, not only the passages `search_docs` finds.
+
+| Field | Value |
+|---|---|
+| URI | The file's `file://` URI, for example `file:///home/me/notes/handbook/travel.md` or `file:///C:/Users/me/notes/handbook/travel.md` |
+| Name | The indexed folder and the path inside it, for example `handbook/travel.md` |
+| Content | Markdown and text files as they are on disk. HTML, Word and PDF files as the text extracted for the index, with PDF pages marked `[page 2]` |
+| MIME type | `text/markdown` for Markdown files, `text/plain` for everything else |
+
+The list follows the index: when files are indexed, changed or removed, the server sends `notifications/resources/list_changed`.
+
+Only files that are in the index can be read. A file that is not indexed, was deleted, has become a symbolic link (or sits in a folder that has), or is no longer inside `DOCSRAG_ALLOWED_PATHS` is refused, even if its URI is valid.
 
 ## Configuration
 
@@ -230,6 +256,7 @@ Without `DOCSRAG_API_KEY`, the server signs in with Microsoft Entra ID through `
 
 - With Ollama, documents and questions never leave your machine.
 - The server only **reads** your files. The only file it writes is the index.
+- Resources only serve files that are in the index and still inside `DOCSRAG_ALLOWED_PATHS`. A URI can't be used to read any other file.
 - Set `DOCSRAG_ALLOWED_PATHS` so an assistant can't index folders you didn't intend, such as your home folder. Paths are resolved before they are checked, so `docs/../secrets` doesn't get around it.
 - Hidden folders (`.git`, `.ssh`, ...), symbolic links and `node_modules`, `bin` and `obj` folders are skipped.
 - An index remembers which embedding model built it. Searching it with a different model is refused instead of silently returning wrong results.
@@ -253,7 +280,7 @@ dotnet build
 dotnet test
 ```
 
-The tests use a deterministic fake embedding model, so they need no network. Two of them start the real server process and talk to it over MCP, the way an assistant does.
+The tests use a deterministic fake embedding model, so they need no network. A few of them start the real server process and talk to it over MCP, the way an assistant does.
 
 To check everything against a real model (Ollama by default):
 
@@ -290,6 +317,7 @@ src/DocsRagMcp/
   Program.cs                  host, dependency injection, MCP server setup
   DocsRagOptions.cs           settings and validation
   Tools/DocsTools.cs          the four MCP tools
+  Resources/DocsResources.cs  indexed files as MCP resources
   Indexing/DocumentIndexer.cs folder sync: hash, read, chunk, embed, store
   Indexing/PathGuard.cs       allowed-folder checks
   Ingestion/DocumentReader*.cs Markdown, text, HTML, Word and PDF reading
@@ -305,7 +333,6 @@ samples/                      sample documents, the smoke test and the search ev
 
 - Reranking the top results with a cross-encoder model
 - A vector index for very large document sets
-- Exposing indexed files as MCP resources
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started, pick a [good first issue](https://github.com/Ahmed-Manai/docs-rag-mcp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), or share an idea in [Discussions](https://github.com/Ahmed-Manai/docs-rag-mcp/discussions).
 

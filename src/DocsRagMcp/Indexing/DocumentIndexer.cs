@@ -29,8 +29,10 @@ public sealed class DocumentIndexer(
     DocsRagOptions options,
     ILogger<DocumentIndexer> logger)
 {
+    /// <summary>Larger files are not indexed, and not served as resources.</summary>
+    public const long MaxFileBytes = 25 * 1024 * 1024;
+
     private const int EmbeddingBatchSize = 32;
-    private const long MaxFileBytes = 25 * 1024 * 1024;
 
     private static readonly HashSet<string> SkippedFolders =
         new(StringComparer.OrdinalIgnoreCase) { "node_modules", "bin", "obj", "packages", "__pycache__" };
@@ -43,6 +45,9 @@ public sealed class DocumentIndexer(
 
     // One indexing run at a time: two runs over the same folder would race on the same files.
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>Raised after files were added to, updated in or removed from the index.</summary>
+    public event Action? SourcesChanged;
 
     /// <summary>Indexes a folder and remembers it, so it can be watched and kept in sync.</summary>
     public async Task<IndexReport> IndexFolderAsync(string folder, CancellationToken cancellationToken = default) =>
@@ -64,6 +69,11 @@ public sealed class DocumentIndexer(
         {
             var files = await store.RemoveAsync(pathOrFolder, cancellationToken);
             var folders = await store.RemoveFoldersAsync(pathOrFolder, cancellationToken);
+            if (files.Count > 0)
+            {
+                SourcesChanged?.Invoke();
+            }
+
             return new RemoveReport(files, folders);
         }
         finally
@@ -148,6 +158,11 @@ public sealed class DocumentIndexer(
             }
 
             await store.AddFolderAsync(root, cancellationToken);
+            if (added + updated + deleted.Count > 0)
+            {
+                SourcesChanged?.Invoke();
+            }
+
             return new IndexReport(root, added, updated, unchanged, deleted.Count, chunkCount, failed);
         }
         finally
