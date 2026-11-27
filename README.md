@@ -225,6 +225,7 @@ Settings come from environment variables (or the matching command-line switch, s
 | `DOCSRAG_RERANK_MODEL` | | Reranking model, for services that serve several, such as `rerank-v3.5` (Cohere) or `jina-reranker-v2-base-multilingual` (Jina) |
 | `DOCSRAG_RERANK_API_KEY` | | Key for the rerank service, sent as a bearer token. Read from the environment only, never from the command line |
 | `DOCSRAG_RERANK_CANDIDATES` | `20` | How many of the best passages are sent to the reranker, from 1 to 100. At least `topK` are always sent |
+| `DOCSRAG_RERANK_TIMEOUT` | `30` | How long a rerank call may take, in seconds, before the normal ranking is used instead. Must be at least 1 |
 
 ### OpenAI
 
