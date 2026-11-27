@@ -66,16 +66,19 @@ public class DocsRagOptionsTests
         var off = Parse();
         Assert.Null(off.RerankEndpoint);
         Assert.Equal(20, off.RerankCandidates);
+        Assert.Equal(TimeSpan.FromSeconds(30), off.RerankTimeout);
 
         var on = Parse(
             ("RERANK_ENDPOINT", "http://localhost:8012/v1/rerank"),
             ("RERANK_MODEL", "bge-reranker-v2-m3"),
             ("RERANK_API_KEY", "secret"),
-            ("RERANK_CANDIDATES", "30"));
+            ("RERANK_CANDIDATES", "30"),
+            ("RERANK_TIMEOUT", "45"));
         Assert.Equal("http://localhost:8012/v1/rerank", on.RerankEndpoint);
         Assert.Equal("bge-reranker-v2-m3", on.RerankModel);
         Assert.Equal("secret", on.RerankApiKey);
         Assert.Equal(30, on.RerankCandidates);
+        Assert.Equal(TimeSpan.FromSeconds(45), on.RerankTimeout);
     }
 
     [Theory]
@@ -91,6 +94,8 @@ public class DocsRagOptionsTests
     [InlineData("RERANK_CANDIDATES", "0")]
     [InlineData("RERANK_CANDIDATES", "101")]
     [InlineData("RERANK_CANDIDATES", "many")]
+    [InlineData("RERANK_TIMEOUT", "0")]
+    [InlineData("RERANK_TIMEOUT", "many")]
     public void Invalid_settings_are_rejected_with_a_clear_message(string key, string value)
     {
         var error = Assert.Throws<DocsRagConfigurationException>(() => Parse((key, value)));
@@ -116,6 +121,7 @@ public class DocsRagOptionsTests
         [
             "--provider", "openai", "--model", "text-embedding-3-large", "--chunk-size", "800",
             "--rerank-endpoint", "http://localhost:8012/v1/rerank", "--rerank-model", "bge-reranker-v2-m3", "--rerank-candidates", "10",
+            "--rerank-timeout", "45",
         ]);
 
         Assert.Equal("openai", config["PROVIDER"]);
@@ -124,6 +130,7 @@ public class DocsRagOptionsTests
         Assert.Equal("http://localhost:8012/v1/rerank", config["RERANK_ENDPOINT"]);
         Assert.Equal("bge-reranker-v2-m3", config["RERANK_MODEL"]);
         Assert.Equal("10", config["RERANK_CANDIDATES"]);
+        Assert.Equal("45", config["RERANK_TIMEOUT"]);
     }
 
     private static DocsRagOptions Parse(params (string Key, string Value)[] settings) =>
