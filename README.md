@@ -264,7 +264,7 @@ Reranking is off by default. When it is on, `search_docs` first ranks the passag
 docs-rag-mcp calls any endpoint that speaks the `/rerank` API that Cohere introduced, which Jina, llama.cpp, vLLM, Infinity and LocalAI also use. To stay local, serve a reranking model with [llama.cpp](https://github.com/ggml-org/llama.cpp):
 
 ```bash
-llama-server -hf gpustack/bge-reranker-v2-m3-GGUF:Q8_0 --reranking --port 8012 -b 1024 -ub 1024
+llama-server -hf gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M --reranking --port 8012 -c 8192 -b 8192 -ub 8192
 ```
 
 ```json
@@ -345,8 +345,9 @@ Results with Ollama and `nomic-embed-text`:
 |---|---|---|---|---|
 | `vector` (0.1.0) | 14 of 14 | 11 of 22 | 15 of 22 | 0.61 |
 | `hybrid` (0.2.0) | 14 of 14 | 12 of 22 | 17 of 22 | 0.66 |
+| `hybrid` + reranking (0.8.0) | 13 of 14 | 18 of 22 | 20 of 22 | 0.88 |
 
-Keyword matching helps most when the question names the feature, such as cancellation, elicitation or completions. It can't help when the question shares no distinctive word with the answer. Both sets are small, so treat these numbers as a direction, not a benchmark.
+Keyword matching helps most when the question names the feature, such as cancellation, elicitation or completions. It can't help when the question shares no distinctive word with the answer. Reranking was measured with `bge-reranker-v2-m3` (Q4_K_M) served by llama.cpp on CPU. It helps most on the SDK docs, where many pages share the same vocabulary and the reranker can tell which one actually answers the question. On the handbook, which is already at 14 of 14, it moves one right answer from first to second place. Both sets are small, so treat these numbers as a direction, not a benchmark.
 
 ```text
 src/DocsRagMcp/
