@@ -73,6 +73,11 @@
           "name": "DOCSRAG_RERANK_CANDIDATES",
           "description": "How many of the best results are sent to the reranker, from 1 to 100. Defaults to 20.",
           "default": "20"
+        },
+        {
+          "name": "DOCSRAG_RERANK_TIMEOUT",
+          "description": "How long a rerank call may take, in seconds, before the normal ranking is used instead. Must be at least 1. Defaults to 30.",
+          "default": "30"
         }
       ]
     }
