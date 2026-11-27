@@ -43,6 +43,7 @@ public sealed record DocsRagOptions
         ["--rerank-endpoint"] = "RERANK_ENDPOINT",
         ["--rerank-model"] = "RERANK_MODEL",
         ["--rerank-candidates"] = "RERANK_CANDIDATES",
+        ["--rerank-timeout"] = "RERANK_TIMEOUT",
     };
 
     /// <summary>The most search results that can be sent to the reranker at once.</summary>
@@ -82,6 +83,9 @@ public sealed record DocsRagOptions
 
     /// <summary>How many of the best search results are sent to the reranker.</summary>
     public int RerankCandidates { get; init; } = 20;
+
+    /// <summary>How long a rerank call may take, in seconds, before the normal ranking is used instead.</summary>
+    public TimeSpan RerankTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Identifies the embedding model, so an index is never searched with vectors from a different model.
@@ -177,6 +181,12 @@ public sealed record DocsRagOptions
                 $"DOCSRAG_RERANK_CANDIDATES must be between 1 and {MaxRerankCandidates}.");
         }
 
+        var rerankTimeoutSeconds = ParseInt(config, "RERANK_TIMEOUT", 30);
+        if (rerankTimeoutSeconds < 1)
+        {
+            throw new DocsRagConfigurationException("DOCSRAG_RERANK_TIMEOUT must be at least 1 second.");
+        }
+
         var allowedPaths = (Value(config, "ALLOWED_PATHS") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(PathUtils.Normalize)
@@ -198,6 +208,7 @@ public sealed record DocsRagOptions
             RerankModel = Value(config, "RERANK_MODEL"),
             RerankApiKey = Value(config, "RERANK_API_KEY"),
             RerankCandidates = rerankCandidates,
+            RerankTimeout = TimeSpan.FromSeconds(rerankTimeoutSeconds),
         };
     }
 
