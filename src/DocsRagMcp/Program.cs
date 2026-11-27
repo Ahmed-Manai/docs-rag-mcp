@@ -42,7 +42,8 @@ builder.Services.AddSingleton(services => new Reranker(
         ? null
         : new RerankClient(new HttpClient(), new Uri(options.RerankEndpoint), options.RerankModel, options.RerankApiKey),
     options,
-    services.GetRequiredService<ILogger<Reranker>>()));
+    services.GetRequiredService<ILogger<Reranker>>())
+{ Timeout = options.RerankTimeout });
 builder.Services.AddSingleton<FolderWatcher>();
 builder.Services.AddSingleton(resources);
 builder.Services.AddSingleton<DocsResources>();
