@@ -40,7 +40,13 @@ public sealed record DocsRagOptions
         ["--chunk-overlap"] = "CHUNK_OVERLAP",
         ["--search-mode"] = "SEARCH_MODE",
         ["--watch"] = "WATCH",
+        ["--rerank-endpoint"] = "RERANK_ENDPOINT",
+        ["--rerank-model"] = "RERANK_MODEL",
+        ["--rerank-candidates"] = "RERANK_CANDIDATES",
     };
+
+    /// <summary>The most search results that can be sent to the reranker at once.</summary>
+    public const int MaxRerankCandidates = 100;
 
     public EmbeddingProvider Provider { get; init; } = EmbeddingProvider.Ollama;
 
@@ -62,6 +68,20 @@ public sealed record DocsRagOptions
 
     /// <summary>Whether indexed folders are watched and re-synced when their files change.</summary>
     public bool Watch { get; init; } = true;
+
+    /// <summary>
+    /// URL of a rerank endpoint (Cohere-style <c>/rerank</c> API). When set, the best search results
+    /// are scored again by a cross-encoder model and reordered. Reranking is off when it is null.
+    /// </summary>
+    public string? RerankEndpoint { get; init; }
+
+    /// <summary>The model the rerank endpoint should use, for servers that serve several.</summary>
+    public string? RerankModel { get; init; }
+
+    public string? RerankApiKey { get; init; }
+
+    /// <summary>How many of the best search results are sent to the reranker.</summary>
+    public int RerankCandidates { get; init; } = 20;
 
     /// <summary>
     /// Identifies the embedding model, so an index is never searched with vectors from a different model.
@@ -142,6 +162,21 @@ public sealed record DocsRagOptions
         var searchMode = ParseSearchMode(Value(config, "SEARCH_MODE"));
         var watch = ParseSwitch(config, "WATCH", true);
 
+        var rerankEndpoint = Value(config, "RERANK_ENDPOINT");
+        if (rerankEndpoint is not null &&
+            !(Uri.TryCreate(rerankEndpoint, UriKind.Absolute, out var rerankUri) && rerankUri.Scheme is "http" or "https"))
+        {
+            throw new DocsRagConfigurationException(
+                $"DOCSRAG_RERANK_ENDPOINT '{rerankEndpoint}' is not a valid http or https URL, for example http://localhost:8012/v1/rerank.");
+        }
+
+        var rerankCandidates = ParseInt(config, "RERANK_CANDIDATES", 20);
+        if (rerankCandidates is < 1 or > MaxRerankCandidates)
+        {
+            throw new DocsRagConfigurationException(
+                $"DOCSRAG_RERANK_CANDIDATES must be between 1 and {MaxRerankCandidates}.");
+        }
+
         var allowedPaths = (Value(config, "ALLOWED_PATHS") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(PathUtils.Normalize)
@@ -159,6 +194,10 @@ public sealed record DocsRagOptions
             ChunkOverlap = chunkOverlap,
             SearchMode = searchMode,
             Watch = watch,
+            RerankEndpoint = rerankEndpoint,
+            RerankModel = Value(config, "RERANK_MODEL"),
+            RerankApiKey = Value(config, "RERANK_API_KEY"),
+            RerankCandidates = rerankCandidates,
         };
     }
 

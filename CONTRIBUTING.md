@@ -19,7 +19,7 @@ dotnet build
 dotnet test
 ```
 
-The tests use a deterministic fake embedding model, so they need no network and no API key. A few of them start the real server process and talk to it over MCP.
+The tests use a deterministic fake embedding model and a fake reranker, so they need no network and no API key. A few of them start the real server process and talk to it over MCP.
 
 To check a change against a real model, install [Ollama](https://ollama.com), run `ollama pull nomic-embed-text`, and then:
 
@@ -48,6 +48,7 @@ You can also open the repository in GitHub Codespaces and work entirely in the b
 | `src/DocsRagMcp/Indexing/` | Folder sync and the allowed-folder checks |
 | `src/DocsRagMcp/Storage/` | SQLite storage and vector search |
 | `src/DocsRagMcp/Embeddings/` | Ollama, OpenAI and Azure OpenAI clients |
+| `src/DocsRagMcp/Reranking/` | Optional reranking of the best results through a `/rerank` endpoint |
 
 ## Reporting security issues
 

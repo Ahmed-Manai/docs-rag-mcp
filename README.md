@@ -28,6 +28,7 @@ Point it at a folder of Markdown, text, HTML, Word or PDF files. It splits them 
 - **Reads Word documents**: `.docx` files are split at their Title and Heading 1 to 3 paragraphs, in any language version of Word, with lists and tables kept readable
 - **Ignores front matter**: YAML front matter from Jekyll, Hugo, Docusaurus or Obsidian is left out of the index, and its `title` names the text before the first heading
 - **Hybrid search**: ranks by meaning and by keywords, so exact terms such as API names and error codes are found too
+- **Optional reranking**: a cross-encoder model, run locally with llama.cpp or as a service such as Cohere or Jina, can reorder the best passages
 - **Safe by default for shared machines**: you can limit which folders it may read
 
 ## Example
@@ -220,6 +221,10 @@ Settings come from environment variables (or the matching command-line switch, s
 | `DOCSRAG_CHUNK_OVERLAP` | `200` | Characters repeated between consecutive chunks |
 | `DOCSRAG_SEARCH_MODE` | `hybrid` | `hybrid` combines keyword and vector ranking; `vector` uses vector similarity only |
 | `DOCSRAG_WATCH` | `true` | Watch indexed folders and index changes automatically. Set to `false` to index only when `index_folder` is called |
+| `DOCSRAG_RERANK_ENDPOINT` | off | URL of a rerank endpoint, such as `http://localhost:8012/v1/rerank`. Setting it turns on [reranking](#reranking) |
+| `DOCSRAG_RERANK_MODEL` | | Reranking model, for services that serve several, such as `rerank-v3.5` (Cohere) or `jina-reranker-v2-base-multilingual` (Jina) |
+| `DOCSRAG_RERANK_API_KEY` | | Key for the rerank service, sent as a bearer token. Read from the environment only, never from the command line |
+| `DOCSRAG_RERANK_CANDIDATES` | `20` | How many of the best passages are sent to the reranker, from 1 to 100. At least `topK` are always sent |
 
 ### OpenAI
 
@@ -252,9 +257,37 @@ Without `DOCSRAG_API_KEY`, the server signs in with Microsoft Entra ID through `
 }
 ```
 
+### Reranking
+
+Reranking is off by default. When it is on, `search_docs` first ranks the passages as usual, then sends the best ones (20 by default) with the question to a cross-encoder model, and returns them in the model's order. A cross-encoder reads the question and the passage together, so it can tell which passage actually answers the question better than comparing two embeddings can, but it is too slow to run over the whole index.
+
+docs-rag-mcp calls any endpoint that speaks the `/rerank` API that Cohere introduced, which Jina, llama.cpp, vLLM, Infinity and LocalAI also use. To stay local, serve a reranking model with [llama.cpp](https://github.com/ggml-org/llama.cpp):
+
+```bash
+llama-server -hf gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M --reranking --port 8012 -c 8192 -b 8192 -ub 8192
+```
+
+```json
+"env": {
+  "DOCSRAG_RERANK_ENDPOINT": "http://localhost:8012/v1/rerank"
+}
+```
+
+Or use a hosted service:
+
+```json
+"env": {
+  "DOCSRAG_RERANK_ENDPOINT": "https://api.cohere.com/v2/rerank",
+  "DOCSRAG_RERANK_MODEL": "rerank-v3.5",
+  "DOCSRAG_RERANK_API_KEY": "..."
+}
+```
+
+If the reranker can't be reached, answers with an error or takes longer than 30 seconds, the server logs a warning and returns the passages in their usual order, so a search never fails because of it. The score shown next to each passage is still its cosine similarity, not the reranker's score.
+
 ## Privacy and security
 
-- With Ollama, documents and questions never leave your machine.
+- With Ollama, documents and questions never leave your machine. If you turn on reranking with a hosted service, the question and the best passages are sent to it.
 - The server only **reads** your files. The only file it writes is the index.
 - Resources only serve files that are in the index and still inside `DOCSRAG_ALLOWED_PATHS`. A URI can't be used to read any other file.
 - Set `DOCSRAG_ALLOWED_PATHS` so an assistant can't index folders you didn't intend, such as your home folder. Paths are resolved before they are checked, so `docs/../secrets` doesn't get around it.
@@ -269,6 +302,7 @@ The article [I built a local RAG server for Claude and Copilot in C#. Here is wh
 - **Each chunk is embedded with its context.** The text sent to the embedding model starts with the file name and heading (for example `travel-and-expenses.md > Hotels`). A short passage like "220 EUR in Paris" then still matches a question about hotel budgets.
 - **Brute-force cosine search over SQLite.** Vectors are stored as blobs and compared with `TensorPrimitives.CosineSimilarity`, which uses SIMD. For personal and team document sets (up to tens of thousands of chunks) this stays fast and needs no native vector extension. A vector index is on the roadmap for larger sets.
 - **Hybrid ranking.** Embeddings are good at meaning but can miss exact terms: in testing, "require a login" matched a page about *logging*. Each chunk is therefore also indexed with SQLite's built-in FTS5 full-text search (porter stemming, headings weighted twice as much as body text). A search scores the candidates both ways, scales both scores to 0..1 and blends them 90% meaning, 10% keywords. Keywords settle close calls without outvoting a clearly better meaning match. Reciprocal rank fusion was tried first, but it let any passage that shared a word with the question beat the best meaning match, and it pushed correct answers down on plain-language questions. The score shown next to each passage is still the cosine similarity.
+- **Reranking is an optional last step.** A cross-encoder judges relevance better than embeddings but has to read every passage with the question, so it only reorders the best candidates (20 by default) after the normal ranking, and it sees the same file name and heading as the embedding model. It is reached over HTTP with the `/rerank` request that Cohere, Jina, llama.cpp, vLLM and others share, so it runs locally or as a service without adding a model runtime to the server: ONNX Runtime would add tens of megabytes of native libraries for each platform plus a tokenizer, and asking a chat model to rank passages is slower and less consistent than a model trained for it. The reranker's scores only decide the order; the score shown stays the cosine similarity, so it reads the same with and without reranking. Any failure keeps the normal order.
 - **Content hashes make re-indexing cheap.** Each file's SHA-256 is stored, so running `index_folder` again only calls the embedding model for files that changed.
 - **Watching reuses the same sync.** Indexed folders are stored in the index and watched with `FileSystemWatcher`. Events only say *that* something changed: they arrive in bursts, can be lost when too many come at once, and differ between Windows, macOS and Linux. So instead of handling events one by one, the watcher waits until the folder has been quiet for 2 seconds and then runs the normal sync, which uses the content hashes to re-embed only what changed. When the server starts, it runs that sync once per folder to catch up on changes made while it was stopped. Changes in hidden and skipped folders, and to the index file itself, are ignored.
 - **Provider-agnostic.** The server depends only on `IEmbeddingGenerator` from [Microsoft.Extensions.AI](https://learn.microsoft.com/dotnet/ai/microsoft-extensions-ai). Supporting another provider means changing one factory class.
@@ -295,6 +329,8 @@ dotnet run samples/smoke.cs -- "How much can I spend on a hotel in Paris?"
 - `handbook.json`: 14 employee questions about the sample handbook, each with the section that answers it. Most use different words from the handbook.
 - `mcp-csharp-sdk-docs.json`: 22 developer questions about the [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk) documentation (30 pages, 556 chunks), each with the page that answers it.
 
+When `DOCSRAG_RERANK_ENDPOINT` is set, it also measures hybrid search with [reranking](#reranking).
+
 ```bash
 dotnet run samples/eval/eval.cs -- samples/eval/handbook.json .
 
@@ -309,8 +345,9 @@ Results with Ollama and `nomic-embed-text`:
 |---|---|---|---|---|
 | `vector` (0.1.0) | 14 of 14 | 11 of 22 | 15 of 22 | 0.61 |
 | `hybrid` (0.2.0) | 14 of 14 | 12 of 22 | 17 of 22 | 0.66 |
+| `hybrid` + reranking (0.8.0) | 13 of 14 | 18 of 22 | 20 of 22 | 0.88 |
 
-Keyword matching helps most when the question names the feature, such as cancellation, elicitation or completions. It can't help when the question shares no distinctive word with the answer. Both sets are small, so treat these numbers as a direction, not a benchmark.
+Keyword matching helps most when the question names the feature, such as cancellation, elicitation or completions. It can't help when the question shares no distinctive word with the answer. Reranking was measured with `bge-reranker-v2-m3` (Q4_K_M) served by llama.cpp on CPU. It helps most on the SDK docs, where many pages share the same vocabulary and the reranker can tell which one actually answers the question. On the handbook, which is already at 14 of 14, it moves one right answer from first to second place. Both sets are small, so treat these numbers as a direction, not a benchmark.
 
 ```text
 src/DocsRagMcp/
@@ -324,6 +361,7 @@ src/DocsRagMcp/
   Ingestion/TextChunker.cs    chunking with overlap
   Storage/ChunkStore.cs       SQLite storage, vector and keyword search, rank fusion
   Storage/KeywordQuery.cs     turns a question into a safe FTS5 query
+  Reranking/                  optional cross-encoder reranking through a /rerank endpoint
   Embeddings/                 Ollama, OpenAI and Azure OpenAI clients
 tests/DocsRagMcp.Tests/       unit and end-to-end tests
 samples/                      sample documents, the smoke test and the search evaluation
@@ -331,7 +369,6 @@ samples/                      sample documents, the smoke test and the search ev
 
 ## Roadmap
 
-- Reranking the top results with a cross-encoder model
 - A vector index for very large document sets
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started, pick a [good first issue](https://github.com/Ahmed-Manai/docs-rag-mcp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), or share an idea in [Discussions](https://github.com/Ahmed-Manai/docs-rag-mcp/discussions).

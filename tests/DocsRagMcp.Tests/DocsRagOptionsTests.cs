@@ -60,6 +60,24 @@ public class DocsRagOptionsTests
         Assert.Null(Parse(("PROVIDER", "openai"), ("ENDPOINT", "http://localhost:1234/v1")).ApiKey);
     }
 
+    [Fact]
+    public void Reranking_is_off_unless_an_endpoint_is_set()
+    {
+        var off = Parse();
+        Assert.Null(off.RerankEndpoint);
+        Assert.Equal(20, off.RerankCandidates);
+
+        var on = Parse(
+            ("RERANK_ENDPOINT", "http://localhost:8012/v1/rerank"),
+            ("RERANK_MODEL", "bge-reranker-v2-m3"),
+            ("RERANK_API_KEY", "secret"),
+            ("RERANK_CANDIDATES", "30"));
+        Assert.Equal("http://localhost:8012/v1/rerank", on.RerankEndpoint);
+        Assert.Equal("bge-reranker-v2-m3", on.RerankModel);
+        Assert.Equal("secret", on.RerankApiKey);
+        Assert.Equal(30, on.RerankCandidates);
+    }
+
     [Theory]
     [InlineData("CHUNK_SIZE", "100")]
     [InlineData("CHUNK_OVERLAP", "900")]
@@ -68,6 +86,11 @@ public class DocsRagOptionsTests
     [InlineData("SEARCH_MODE", "keyword")]
     [InlineData("WATCH", "sometimes")]
     [InlineData("ENDPOINT", "not a url")]
+    [InlineData("RERANK_ENDPOINT", "localhost:8012/rerank")]
+    [InlineData("RERANK_ENDPOINT", "ftp://example.com/rerank")]
+    [InlineData("RERANK_CANDIDATES", "0")]
+    [InlineData("RERANK_CANDIDATES", "101")]
+    [InlineData("RERANK_CANDIDATES", "many")]
     public void Invalid_settings_are_rejected_with_a_clear_message(string key, string value)
     {
         var error = Assert.Throws<DocsRagConfigurationException>(() => Parse((key, value)));
@@ -89,11 +112,18 @@ public class DocsRagOptionsTests
     [Fact]
     public void Command_line_switches_are_supported()
     {
-        var config = DocsRagOptions.BuildConfiguration(["--provider", "openai", "--model", "text-embedding-3-large", "--chunk-size", "800"]);
+        var config = DocsRagOptions.BuildConfiguration(
+        [
+            "--provider", "openai", "--model", "text-embedding-3-large", "--chunk-size", "800",
+            "--rerank-endpoint", "http://localhost:8012/v1/rerank", "--rerank-model", "bge-reranker-v2-m3", "--rerank-candidates", "10",
+        ]);
 
         Assert.Equal("openai", config["PROVIDER"]);
         Assert.Equal("text-embedding-3-large", config["MODEL"]);
         Assert.Equal("800", config["CHUNK_SIZE"]);
+        Assert.Equal("http://localhost:8012/v1/rerank", config["RERANK_ENDPOINT"]);
+        Assert.Equal("bge-reranker-v2-m3", config["RERANK_MODEL"]);
+        Assert.Equal("10", config["RERANK_CANDIDATES"]);
     }
 
     private static DocsRagOptions Parse(params (string Key, string Value)[] settings) =>

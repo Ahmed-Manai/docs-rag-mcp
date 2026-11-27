@@ -2,6 +2,7 @@ using DocsRagMcp;
 using DocsRagMcp.Embeddings;
 using DocsRagMcp.Indexing;
 using DocsRagMcp.Ingestion;
+using DocsRagMcp.Reranking;
 using DocsRagMcp.Resources;
 using DocsRagMcp.Storage;
 using DocsRagMcp.Tools;
@@ -36,6 +37,12 @@ builder.Services.AddSingleton(_ => new ChunkStore(options.DatabasePath));
 builder.Services.AddSingleton(_ => new TextChunker(options.ChunkSize, options.ChunkOverlap));
 builder.Services.AddSingleton(_ => new PathGuard(options.AllowedPaths));
 builder.Services.AddSingleton<DocumentIndexer>();
+builder.Services.AddSingleton(services => new Reranker(
+    options.RerankEndpoint is null
+        ? null
+        : new RerankClient(new HttpClient(), new Uri(options.RerankEndpoint), options.RerankModel, options.RerankApiKey),
+    options,
+    services.GetRequiredService<ILogger<Reranker>>()));
 builder.Services.AddSingleton<FolderWatcher>();
 builder.Services.AddSingleton(resources);
 builder.Services.AddSingleton<DocsResources>();
@@ -62,11 +69,12 @@ var app = builder.Build();
 await app.Services.GetRequiredService<DocsResources>().RefreshAsync();
 
 app.Services.GetRequiredService<ILogger<DocsRagOptions>>().LogInformation(
-    "docs-rag-mcp is using {Model}, {SearchMode} search and the index at {Database}; folder watching is {Watch}",
+    "docs-rag-mcp is using {Model}, {SearchMode} search and the index at {Database}; folder watching is {Watch}; reranking is {Rerank}",
     options.EmbeddingModelId,
     options.SearchMode.ToString().ToLowerInvariant(),
     options.DatabasePath,
-    options.Watch ? "on" : "off");
+    options.Watch ? "on" : "off",
+    options.RerankEndpoint is null ? "off" : $"on ({options.RerankEndpoint}, top {options.RerankCandidates})");
 
 await app.RunAsync();
 return 0;

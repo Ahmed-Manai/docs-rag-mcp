@@ -24,6 +24,47 @@ public sealed class DocsToolsTests : IDisposable
         Assert.Contains("five business days", result);
     }
 
+    [Fact]
+    public async Task Search_reranks_the_best_candidates_and_keeps_the_cosine_score()
+    {
+        // The fake model only trusts passages that mention a deadline, which the plain search ranks lower.
+        var reranking = new FakeRerankClient
+        {
+            Score = (_, documents) => documents.Select(d => (double?)(d.Contains("deadline", StringComparison.Ordinal) ? 1 : 0)).ToList(),
+        };
+        using var server = new TestServer(rerankClient: reranking, rerankCandidates: 3);
+        server.Docs.Write("refunds.md", "# Refunds\nRefunds are paid back to the card.\n\n# Refund deadline\nAsk for refunds within 30 days.");
+        server.Docs.Write("travel.md", "# Hotels\nBook hotels through the travel portal.");
+        await server.Tools.IndexFolderAsync(server.Docs.Path);
+        await _server.Tools.IndexFolderAsync(server.Docs.Path);
+
+        var plain = await _server.Tools.SearchDocsAsync("refunds are paid back", topK: 2);
+        var reranked = await server.Tools.SearchDocsAsync("refunds are paid back", topK: 1);
+
+        Assert.Contains("refunds.md > Refunds (score", plain.Split("\n\n")[1]);
+        Assert.Contains("refunds.md > Refund deadline (score", reranked);
+        Assert.Equal(Score(plain, "Refund deadline"), Score(reranked, "Refund deadline"));
+        Assert.Equal(3, Assert.Single(reranking.Calls).Documents.Count);
+    }
+
+    [Fact]
+    public async Task Search_keeps_its_order_when_the_reranker_fails()
+    {
+        var reranking = new FakeRerankClient { Score = (_, _) => throw new HttpRequestException("Connection refused") };
+        using var server = new TestServer(rerankClient: reranking);
+        server.Docs.Write("refunds.md", "# Refunds\nRefunds are paid back to the card.\n\n# Refund deadline\nAsk for refunds within 30 days.");
+        await server.Tools.IndexFolderAsync(server.Docs.Path);
+        await _server.Tools.IndexFolderAsync(server.Docs.Path);
+
+        var result = await server.Tools.SearchDocsAsync("refunds are paid back", topK: 2);
+
+        Assert.Equal(await _server.Tools.SearchDocsAsync("refunds are paid back", topK: 2), result);
+        Assert.Contains("Connection refused", Assert.Single(server.Logger.Entries).Message);
+    }
+
+    private static string Score(string result, string section) =>
+        result.Split('\n').Single(line => line.Contains($"> {section} (score", StringComparison.Ordinal)).Split("(score ")[1];
+
     [Theory]
     [InlineData("absolute")]
     [InlineData("relative")]

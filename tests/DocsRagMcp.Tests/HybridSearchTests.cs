@@ -173,6 +173,31 @@ public sealed class HybridSearchTests : IDisposable
         Assert.Equal("Configure the reverse proxy headers.", hits[0].Text);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("redis cache")]
+    public async Task Asking_for_more_results_does_not_reorder_the_first_ones(string? keywords)
+    {
+        // More chunks than the candidate pool, so the extra results come from beyond it.
+        var random = new Random(42);
+        var chunks = Enumerable.Range(0, 80)
+            .Select(i => Chunk(
+                i,
+                i % 7 == 0 ? $"Passage {i} about the redis cache." : $"Passage {i} about something else.",
+                (float)random.NextDouble(),
+                (float)random.NextDouble(),
+                (float)random.NextDouble()))
+            .ToList();
+        await _store.ReplaceSourceAsync(Doc("a.md"), "h1", chunks);
+
+        var top = await _store.SearchAsync(Query, topK: 3, keywords: keywords);
+        var more = await _store.SearchAsync(Query, topK: 3, keywords: keywords, limit: 70);
+
+        Assert.Equal(top, more.Take(3));
+        Assert.Equal(70, more.Count);
+        Assert.Equal(70, more.Select(hit => hit.Text).Distinct().Count());
+    }
+
     /// <summary>Writes an index the way docs-rag-mcp 0.1.0 did: same tables, no full-text index.</summary>
     private static void CreateVersion010Index(string path, string keywordText, string vectorText)
     {

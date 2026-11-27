@@ -296,15 +296,19 @@ public sealed class ChunkStore
     /// scores are scaled to 0..1 and blended, so a passage that uses the exact terms of the question
     /// rises when its meaning is about as close as the others'. The returned score is always the
     /// cosine similarity, so it reads the same in both modes.
+    /// <paramref name="limit"/> returns more results in the same order, for example for a reranker
+    /// to choose from, without changing how the first <paramref name="topK"/> are ranked.
     /// </summary>
     public async Task<IReadOnlyList<SearchHit>> SearchAsync(
         ReadOnlyMemory<float> query,
         int topK,
         IReadOnlyCollection<string>? within = null,
         string? keywords = null,
+        int? limit = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(topK, 1);
+        var count = Math.Max(topK, limit ?? topK);
 
         await using var connection = await OpenAsync(cancellationToken);
 
@@ -327,8 +331,20 @@ public sealed class ChunkStore
             : await ScoreByKeywordsAsync(connection, keywordQuery, similarities, candidates, cancellationToken);
 
         var ranked = keywordScores.Count == 0
-            ? byVector.Take(topK).ToList()
-            : Blend(byVector, keywordScores, similarities).Take(topK).ToList();
+            ? byVector.Take(count).ToList()
+            : Blend(byVector, keywordScores, similarities).Take(count).ToList();
+
+        // The candidate pool depends on topK only, so asking for more results never reorders the
+        // first ones. If the pool is smaller than the limit, the next best by meaning fill it up.
+        if (ranked.Count < count && ranked.Count < similarities.Count)
+        {
+            var taken = ranked.ToHashSet();
+            ranked.AddRange(similarities
+                .Where(pair => !taken.Contains(pair.Key))
+                .OrderByDescending(pair => pair.Value)
+                .Take(count - ranked.Count)
+                .Select(pair => pair.Key));
+        }
 
         var hits = await LoadHitsAsync(connection, ranked, similarities, cancellationToken);
         return ranked.Select(id => hits[id]).ToList();
