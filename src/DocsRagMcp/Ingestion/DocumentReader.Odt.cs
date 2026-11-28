@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
@@ -28,7 +29,7 @@ public static partial class DocumentReader
         {
             // Do not read nested paragraphs twice (for example, in an annotation).
             if (paragraph.Ancestors().Any(element =>
-                    element.Name == OdfText + "p" || element.Name == OdfText + "h"))
+                    element.Name == OdfText + "p" || element.Name == OdfText + "h" || IsOdtExcluded(element)))
             {
                 continue;
             }
@@ -40,7 +41,7 @@ public static partial class DocumentReader
             }
 
             if (paragraph.Name == OdfText + "h"
-                && int.TryParse(paragraph.Attribute(OdfText + "outline-level")?.Value, out var level)
+                && int.TryParse(paragraph.Attribute(OdfText + "outline-level")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var level)
                 && level is >= 1 and <= 3)
             {
                 Flush();
@@ -71,13 +72,16 @@ public static partial class DocumentReader
         }
     }
 
+    private static bool IsOdtExcluded(XElement element) =>
+        element.Name == OdfOffice + "annotation" || element.Name == OdfText + "note"
+        || element.Name == OdfText + "tracked-changes";
+
     private static string OdtParagraphText(XElement paragraph)
     {
         var text = new StringBuilder();
         foreach (var node in paragraph.DescendantNodes())
         {
-            if (node.Ancestors().Any(element => element.Name == OdfOffice + "annotation"
-                || element.Name == OdfText + "note" || element.Name == OdfText + "tracked-changes"))
+            if (node.Ancestors().Any(IsOdtExcluded))
             {
                 continue;
             }
@@ -91,8 +95,9 @@ public static partial class DocumentReader
                 if (element.Name == OdfText + "s")
                 {
                     // A run of explicit spaces; cap expansion of untrusted attributes.
-                    var count = int.TryParse(element.Attribute(OdfText + "c")?.Value, out var spaces)
-                        ? Math.Clamp(spaces, 1, 1024) : 1;
+                    var count = int.TryParse(element.Attribute(OdfText + "c")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var spaces)
+                        ? Math.Clamp(spaces, 1, 2) : 1;
+                    // Whitespace is not significant for search; avoid amplifying compressed XML.
                     text.Append(' ', count);
                 }
                 else if (element.Name == OdfText + "tab")
