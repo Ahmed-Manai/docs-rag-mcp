@@ -273,12 +273,22 @@ llama-server -hf gpustack/bge-reranker-v2-m3-GGUF:Q4_K_M --reranking --port 8012
 }
 ```
 
-Or use a hosted service:
+Or use a hosted service such as Cohere:
 
 ```json
 "env": {
   "DOCSRAG_RERANK_ENDPOINT": "https://api.cohere.com/v2/rerank",
   "DOCSRAG_RERANK_MODEL": "rerank-v3.5",
+  "DOCSRAG_RERANK_API_KEY": "..."
+}
+```
+
+For [Jina AI](https://jina.ai/reranker/), set the endpoint, model and your Jina API key:
+
+```json
+"env": {
+  "DOCSRAG_RERANK_ENDPOINT": "https://api.jina.ai/v1/rerank",
+  "DOCSRAG_RERANK_MODEL": "jina-reranker-v2-base-multilingual",
   "DOCSRAG_RERANK_API_KEY": "..."
 }
 ```
