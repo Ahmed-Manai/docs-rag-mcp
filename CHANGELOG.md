@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Index OpenDocument Text (`.odt`) files, splitting at outline levels 1 to 3.
+
 ## 0.8.0 - 2026-11-26
 
 - Optional reranking: `search_docs` can reorder its best passages with a cross-encoder model. Set `DOCSRAG_RERANK_ENDPOINT` (`--rerank-endpoint`) to any endpoint that speaks the Cohere-style `/rerank` API, such as llama.cpp's `llama-server --reranking` with `bge-reranker-v2-m3` for a fully local setup, or Cohere, Jina, vLLM or Infinity. `DOCSRAG_RERANK_MODEL` (`--rerank-model`) picks the model and `DOCSRAG_RERANK_API_KEY` is sent as a bearer token
