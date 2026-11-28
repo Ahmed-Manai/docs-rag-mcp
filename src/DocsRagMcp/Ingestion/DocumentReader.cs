@@ -17,13 +17,19 @@ public static partial class DocumentReader
         new(StringComparer.OrdinalIgnoreCase) { ".md", ".markdown", ".mdx" };
 
     private static readonly HashSet<string> PlainTextExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".txt", ".rst", ".adoc" };
+        new(StringComparer.OrdinalIgnoreCase) { ".txt" };
+
+    private static readonly HashSet<string> RestructuredTextExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".rst" };
+
+    private static readonly HashSet<string> AsciiDocExtensions =
+        new(StringComparer.OrdinalIgnoreCase) { ".adoc" };
 
     private static readonly HashSet<string> HtmlExtensions =
         new(StringComparer.OrdinalIgnoreCase) { ".html", ".htm" };
 
     public static IReadOnlyCollection<string> SupportedExtensions { get; } =
-        [.. MarkdownExtensions, .. PlainTextExtensions, .. HtmlExtensions, ".docx", ".pdf"];
+        [.. MarkdownExtensions, .. PlainTextExtensions, .. RestructuredTextExtensions, .. AsciiDocExtensions, .. HtmlExtensions, ".docx", ".pdf"];
 
     public static bool IsSupported(string path) =>
         SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)
@@ -54,6 +60,16 @@ public static partial class DocumentReader
         }
 
         var text = File.ReadAllText(path);
+        if (RestructuredTextExtensions.Contains(extension))
+        {
+            return SplitRestructuredText(text);
+        }
+
+        if (AsciiDocExtensions.Contains(extension))
+        {
+            return SplitAsciiDoc(text);
+        }
+
         return MarkdownExtensions.Contains(extension)
             ? SplitMarkdown(text)
             : string.IsNullOrWhiteSpace(text) ? [] : [new DocumentPart(text.Trim(), null)];
@@ -104,6 +120,209 @@ public static partial class DocumentReader
                 parts.Add(new DocumentPart(text, heading));
             }
         }
+    }
+
+    /// <summary>
+    /// Splits AsciiDoc at its headings, the way Markdown files are split. Only the first three
+    /// heading levels (<c>=</c>, <c>==</c>, <c>===</c>) split; deeper ones stay as text. Lines
+    /// inside <c>----</c> (listing) and <c>....</c> (literal) blocks are not headings.
+    /// </summary>
+    public static IReadOnlyList<DocumentPart> SplitAsciiDoc(string asciidoc)
+    {
+        var parts = new List<DocumentPart>();
+        var current = new StringBuilder();
+        var lines = asciidoc.ReplaceLineEndings("\n").Split('\n');
+        string? heading = null;
+        var hasBody = false;
+        var inLiteralBlock = false;
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.TrimEnd();
+
+            if (trimmed is "----" or "....")
+            {
+                inLiteralBlock = !inLiteralBlock;
+            }
+            else if (!inLiteralBlock && TryParseAsciiDocHeading(line, out var title))
+            {
+                Flush();
+                heading = title;
+                hasBody = false;
+            }
+            else if (line.Trim().Length > 0)
+            {
+                // Blank lines carry no content: a heading followed only by blank lines
+                // and another heading is skipped, the way Markdown does it.
+                hasBody = true;
+            }
+
+            current.Append(line).Append('\n');
+        }
+
+        Flush();
+        return parts;
+
+        void Flush()
+        {
+            var text = current.ToString().Trim();
+            current.Clear();
+
+            // A heading directly followed by another heading carries no content of its own.
+            if (text.Length > 0 && hasBody)
+            {
+                parts.Add(new DocumentPart(text, heading));
+            }
+        }
+    }
+
+    private static bool TryParseAsciiDocHeading(string line, out string title)
+    {
+        var level = 0;
+        while (level < line.Length && line[level] == '=')
+        {
+            level++;
+        }
+
+        if (level is >= 1 and <= 3 && level < line.Length && line[level] == ' ')
+        {
+            title = line[(level + 1)..].Trim();
+            return title.Length > 0;
+        }
+
+        title = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Splits reStructuredText at its headings, the way Markdown files are split. A heading is a
+    /// line of text underlined (and sometimes overlined) with a row of the same punctuation
+    /// character, at least as long as the text. The level comes from the order in which the
+    /// underline styles first appear in the file; only the first three levels split.
+    /// </summary>
+    public static IReadOnlyList<DocumentPart> SplitRestructuredText(string rst)
+    {
+        var parts = new List<DocumentPart>();
+        var current = new StringBuilder();
+        var lines = rst.ReplaceLineEndings("\n").Split('\n');
+        string? heading = null;
+        var hasBody = false;
+        var styles = new List<char>();
+
+        var i = 0;
+        while (i < lines.Length)
+        {
+            // An overlined heading takes three lines; the underline-only form takes two. Check
+            // the overlined form first so its overline is not left behind as body text.
+            if (i + 2 < lines.Length
+                && TryParseRstHeading(lines[i + 1], lines[i], lines[i + 2], styles, out var overTitle, out var overLevel))
+            {
+                if (overLevel <= 3)
+                {
+                    Flush();
+                    heading = overTitle;
+                    hasBody = false;
+                }
+                else
+                {
+                    hasBody = true;
+                }
+
+                current.Append(lines[i]).Append('\n');
+                current.Append(lines[i + 1]).Append('\n');
+                current.Append(lines[i + 2]).Append('\n');
+                i += 3;
+                continue;
+            }
+
+            if (i + 1 < lines.Length
+                && TryParseRstHeading(lines[i], null, lines[i + 1], styles, out var title, out var level))
+            {
+                if (level <= 3)
+                {
+                    Flush();
+                    heading = title;
+                    hasBody = false;
+                }
+                else
+                {
+                    hasBody = true;
+                }
+
+                current.Append(lines[i]).Append('\n');
+                current.Append(lines[i + 1]).Append('\n');
+                i += 2;
+                continue;
+            }
+
+            if (lines[i].Trim().Length > 0)
+            {
+                // Blank lines carry no content: a heading followed only by blank lines
+                // and another heading is skipped, the way Markdown does it.
+                hasBody = true;
+            }
+
+            current.Append(lines[i]).Append('\n');
+            i++;
+        }
+
+        Flush();
+        return parts;
+
+        void Flush()
+        {
+            var text = current.ToString().Trim();
+            current.Clear();
+
+            // A heading directly followed by another heading carries no content of its own.
+            if (text.Length > 0 && hasBody)
+            {
+                parts.Add(new DocumentPart(text, heading));
+            }
+        }
+    }
+
+    private static bool TryParseRstHeading(string textLine, string? overline, string underline, List<char> styles, out string title, out int level)
+    {
+        title = string.Empty;
+        level = 0;
+        var text = textLine.Trim();
+        if (text.Length == 0 || !text.Any(char.IsLetterOrDigit))
+        {
+            return false;
+        }
+
+        var adornment = underline.TrimEnd();
+        if (adornment.Length < text.Length)
+        {
+            return false;
+        }
+
+        var mark = adornment[0];
+        if (char.IsLetterOrDigit(mark) || char.IsWhiteSpace(mark) || adornment.Any(c => c != mark))
+        {
+            return false;
+        }
+
+        if (overline is not null)
+        {
+            var over = overline.TrimEnd();
+            if (over.Length < text.Length || over.Any(c => c != mark))
+            {
+                return false;
+            }
+        }
+
+        var index = styles.IndexOf(mark);
+        if (index < 0)
+        {
+            styles.Add(mark);
+            index = styles.Count - 1;
+        }
+
+        level = index + 1;
+        title = text;
+        return true;
     }
 
     /// <summary>
