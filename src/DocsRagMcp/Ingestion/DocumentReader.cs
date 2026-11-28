@@ -10,7 +10,7 @@ namespace DocsRagMcp.Ingestion;
 /// <summary>A piece of a document, with a readable location such as a Markdown heading or a PDF page.</summary>
 public sealed record DocumentPart(string Text, string? Location);
 
-/// <summary>Turns Markdown, plain-text, HTML, Word and PDF files into text parts that keep track of where they came from.</summary>
+/// <summary>Turns Markdown, plain-text, HTML, Word, OpenDocument Text and PDF files into text parts that keep track of where they came from.</summary>
 public static partial class DocumentReader
 {
     private static readonly HashSet<string> MarkdownExtensions =
@@ -23,7 +23,7 @@ public static partial class DocumentReader
         new(StringComparer.OrdinalIgnoreCase) { ".html", ".htm" };
 
     public static IReadOnlyCollection<string> SupportedExtensions { get; } =
-        [.. MarkdownExtensions, .. PlainTextExtensions, .. HtmlExtensions, ".docx", ".pdf"];
+        [.. MarkdownExtensions, .. PlainTextExtensions, .. HtmlExtensions, ".docx", ".odt", ".pdf"];
 
     public static bool IsSupported(string path) =>
         SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)
@@ -44,6 +44,12 @@ public static partial class DocumentReader
         {
             using var stream = File.OpenRead(path);
             return ReadWord(stream);
+        }
+
+        if (extension.Equals(".odt", StringComparison.OrdinalIgnoreCase))
+        {
+            using var stream = File.OpenRead(path);
+            return ReadOdt(stream);
         }
 
         if (HtmlExtensions.Contains(extension))
