@@ -57,6 +57,18 @@ public sealed class OdtReaderTests : IDisposable
     }
 
     [Fact]
+    public void Tracked_changes_are_not_indexed_and_space_counts_are_bounded()
+    {
+        var path = WriteOdt("changes.odt", """
+            <text:tracked-changes><text:changed-region><text:deletion><text:p>Deleted text.</text:p></text:deletion></text:changed-region></text:tracked-changes>
+            <text:p>Visible<text:s text:c="2147483647"/>text.</text:p>
+            """);
+
+        var part = Assert.Single(DocumentReader.Read(path));
+        Assert.Equal("Visible  text.", part.Text);
+    }
+
+    [Fact]
     public void Missing_content_is_rejected()
     {
         var path = _folder.Combine("missing.odt");
