@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- reStructuredText (`.rst`) and AsciiDoc (`.adoc`) files are split at their headings, like Markdown: AsciiDoc `=`/`==`/`===` headings, and reStructuredText underlined (or overlined) headings, with the level from the order the underline styles first appear. Lines inside AsciiDoc `----` and `....` blocks are not headings (#16)
+
 ## 0.8.0 - 2026-11-26
 
 - Optional reranking: `search_docs` can reorder its best passages with a cross-encoder model. Set `DOCSRAG_RERANK_ENDPOINT` (`--rerank-endpoint`) to any endpoint that speaks the Cohere-style `/rerank` API, such as llama.cpp's `llama-server --reranking` with `bge-reranker-v2-m3` for a fully local setup, or Cohere, Jina, vLLM or Infinity. `DOCSRAG_RERANK_MODEL` (`--rerank-model`) picks the model and `DOCSRAG_RERANK_API_KEY` is sent as a bearer token

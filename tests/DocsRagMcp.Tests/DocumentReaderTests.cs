@@ -203,6 +203,137 @@ public class DocumentReaderTests
         Assert.Empty(DocumentReader.SplitHtml("<html><head><title>Empty</title></head><body><script>run()</script></body></html>"));
     }
 
+    [Fact]
+    public void AsciiDoc_is_split_at_headings()
+    {
+        var parts = DocumentReader.SplitAsciiDoc("Intro text.\n\n= Install\nRun the installer.\n\n== Windows\nUse winget.\n\n=== Details\nSmall print.\n");
+
+        Assert.Collection(
+            parts,
+            part =>
+            {
+                Assert.Null(part.Location);
+                Assert.Equal("Intro text.", part.Text);
+            },
+            part =>
+            {
+                Assert.Equal("Install", part.Location);
+                Assert.Contains("Run the installer.", part.Text);
+            },
+            part =>
+            {
+                Assert.Equal("Windows", part.Location);
+                Assert.Contains("Use winget.", part.Text);
+            },
+            part =>
+            {
+                Assert.Equal("Details", part.Location);
+                Assert.Contains("Small print.", part.Text);
+            });
+    }
+
+    [Fact]
+    public void AsciiDoc_deeper_headings_stay_as_text()
+    {
+        var part = Assert.Single(DocumentReader.SplitAsciiDoc("= Guide\nSome text.\n\n==== Deep\nMore text."));
+
+        Assert.Equal("Guide", part.Location);
+        Assert.Contains("==== Deep", part.Text);
+        Assert.Contains("More text.", part.Text);
+    }
+
+    [Theory]
+    [InlineData("----")]
+    [InlineData("....")]
+    public void AsciiDoc_lines_inside_listing_and_literal_blocks_are_not_headings(string fence)
+    {
+        var part = Assert.Single(DocumentReader.SplitAsciiDoc($"= Guide\n{fence}\n= Not a heading\n{fence}\nReal text."));
+
+        Assert.Equal("Guide", part.Location);
+        Assert.Contains("= Not a heading", part.Text);
+        Assert.Contains("Real text.", part.Text);
+    }
+
+    [Fact]
+    public void RestructuredText_is_split_at_underlined_headings()
+    {
+        var parts = DocumentReader.SplitRestructuredText("Intro text.\n\nInstall\n=======\n\nRun the installer.\n\nWindows\n-------\n\nUse winget.\n");
+
+        Assert.Collection(
+            parts,
+            part =>
+            {
+                Assert.Null(part.Location);
+                Assert.Equal("Intro text.", part.Text);
+            },
+            part =>
+            {
+                Assert.Equal("Install", part.Location);
+                Assert.Contains("Run the installer.", part.Text);
+            },
+            part =>
+            {
+                Assert.Equal("Windows", part.Location);
+                Assert.Contains("Use winget.", part.Text);
+            });
+    }
+
+    [Fact]
+    public void RestructuredText_overlined_headings_split_too()
+    {
+        var part = Assert.Single(DocumentReader.SplitRestructuredText("=======\nInstall\n=======\n\nRun the installer."));
+
+        Assert.Equal("Install", part.Location);
+        Assert.Contains("Run the installer.", part.Text);
+    }
+
+    [Fact]
+    public void RestructuredText_heading_level_comes_from_first_appearance()
+    {
+        var parts = DocumentReader.SplitRestructuredText(
+            "One\n===\n\ntext one\n\nTwo\n---\n\ntext two\n\nThree\n~~~\n\ntext three\n\nFour\n^^^\n\ntext four\n");
+
+        Assert.Collection(
+            parts,
+            part => Assert.Equal("One", part.Location),
+            part => Assert.Equal("Two", part.Location),
+            part =>
+            {
+                // "^" is the fourth underline style in the file, so "Four" is not a heading:
+                // it stays as text in the "Three" part.
+                Assert.Equal("Three", part.Location);
+                Assert.Contains("Four", part.Text);
+                Assert.Contains("text four", part.Text);
+            });
+    }
+
+    [Fact]
+    public void RestructuredText_short_underline_is_not_a_heading()
+    {
+        var part = Assert.Single(DocumentReader.SplitRestructuredText("Install\n==\n\nRun the installer."));
+
+        Assert.Null(part.Location);
+        Assert.Contains("Install\n==", part.Text);
+        Assert.Contains("Run the installer.", part.Text);
+    }
+
+    [Theory]
+    [InlineData("guide.rst", "Intro.\n\nInstall\n=======\n\nRun it.\n", "Install")]
+    [InlineData("guide.adoc", "Intro.\n\n= Install\nRun it.\n", "Install")]
+    public void Rst_and_AsciiDoc_files_are_split_at_headings(string fileName, string content, string location)
+    {
+        using var folder = new TempFolder();
+        var path = folder.Write(fileName, content);
+
+        Assert.True(DocumentReader.IsSupported(path));
+        var parts = DocumentReader.Read(path);
+
+        Assert.Collection(
+            parts,
+            part => Assert.Null(part.Location),
+            part => Assert.Equal(location, part.Location));
+    }
+
     [Theory]
     [InlineData("guide.html")]
     [InlineData("guide.HTM")]
@@ -239,6 +370,8 @@ public class DocumentReaderTests
     [InlineData("guide.md", true)]
     [InlineData("REPORT.PDF", true)]
     [InlineData("notes.txt", true)]
+    [InlineData("notes.rst", true)]
+    [InlineData("notes.adoc", true)]
     [InlineData("Program.cs", false)]
     [InlineData("contract.docx", true)]
     [InlineData("contract.doc", false)]
